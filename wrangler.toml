@@ -13,4 +13,4 @@ bucket_name = "bike-marketplace-linkoping"
 
 [vars]
 PUBLIC_R2_BASE_URL = "https://pub-1b1634891ffc417b84c11bd3eb2b1143.r2.dev"
-ADMIN_EMAILS = ""
+ADMIN_EMAILS = "maxschimmel17799@gmail.com"
