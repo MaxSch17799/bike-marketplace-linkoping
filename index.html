@@ -1,0 +1,40 @@
+﻿<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bike Marketplace Linkoping</title>
+    <meta name="description" content="Simple bike marketplace for Linkoping." />
+    <link rel="stylesheet" href="/assets/app.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="site-header">
+        <div class="brand">
+          <div class="brand-mark">Bike</div>
+          <div class="brand-sub">Marketplace Linkoping</div>
+        </div>
+        <nav class="nav" id="nav">
+          <a href="/" data-route="/">Browse</a>
+          <a href="/sell" data-route="/sell">Sell</a>
+          <a href="/dashboard" data-route="/dashboard">Dashboard</a>
+          <a href="/admin" data-route="/admin">Admin</a>
+        </nav>
+      </header>
+
+      <main id="app" class="app"></main>
+
+      <footer class="site-footer">
+        <span>Simple, local, no logins.</span>
+        <span class="footer-muted">Use responsibly and avoid sharing sensitive details.</span>
+      </footer>
+    </div>
+
+    <noscript>
+      <div class="noscript">This site needs JavaScript to load listings and submit forms.</div>
+    </noscript>
+
+    <script src="/assets/config.js"></script>
+    <script src="/assets/app.js" defer></script>
+  </body>
+</html>

@@ -1,0 +1,19 @@
+name = "bike-marketplace-linkoping"
+compatibility_date = "2024-12-01"
+pages_build_output_dir = "."
+
+[[d1_databases]]
+binding = "DB"
+database_name = "bike-marketplace-linkoping"
+database_id = ""
+
+[[r2_buckets]]
+binding = "PUBLIC_BUCKET"
+bucket_name = "bike-marketplace-linkoping"
+
+[vars]
+PUBLIC_R2_BASE_URL = ""
+TURNSTILE_SECRET_KEY = ""
+TOKEN_HASH_SALT = ""
+IP_HASH_SALT = ""
+ADMIN_EMAILS = ""

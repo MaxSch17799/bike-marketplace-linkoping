@@ -1,0 +1,165 @@
+import { CONDITIONS, CONTACT_MODES, FEATURES, FAULTS, LIMITS, LISTING_TYPES } from "./constants.js";
+
+function toNumber(value) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function trimText(value) {
+  if (!value) {
+    return "";
+  }
+  return String(value).trim();
+}
+
+function isValidEmail(value) {
+  if (!value) {
+    return false;
+  }
+  return /^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(value);
+}
+
+function isValidPhone(value) {
+  if (!value) {
+    return false;
+  }
+  return /^[0-9+()\\s-]{6,}$/.test(value);
+}
+
+export function parseJsonArray(value) {
+  if (!value) {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    return [];
+  }
+}
+
+export function validateListingFields(fields) {
+  const price = toNumber(fields.price_sek);
+  if (price === null || price < 0) {
+    return { ok: false, error: "Invalid price." };
+  }
+
+  const brand = trimText(fields.brand);
+  if (!brand || brand.length > LIMITS.maxBrandLength) {
+    return { ok: false, error: "Invalid brand." };
+  }
+
+  if (!LISTING_TYPES.includes(fields.type)) {
+    return { ok: false, error: "Invalid type." };
+  }
+
+  if (!CONDITIONS.includes(fields.condition)) {
+    return { ok: false, error: "Invalid condition." };
+  }
+
+  const wheelSize = toNumber(fields.wheel_size_in);
+  if (wheelSize !== null && (wheelSize < 10 || wheelSize > 36)) {
+    return { ok: false, error: "Invalid wheel size." };
+  }
+
+  const location = trimText(fields.location);
+  if (!location || location.length > LIMITS.maxLocationLength) {
+    return { ok: false, error: "Invalid location." };
+  }
+
+  if (!CONTACT_MODES.includes(fields.contact_mode)) {
+    return { ok: false, error: "Invalid contact mode." };
+  }
+
+  const features = (fields.features || []).filter((item) => FEATURES.includes(item));
+  const faults = (fields.faults || []).filter((item) => FAULTS.includes(item));
+
+  if (features.length !== (fields.features || []).length) {
+    return { ok: false, error: "Invalid features." };
+  }
+  if (faults.length !== (fields.faults || []).length) {
+    return { ok: false, error: "Invalid faults." };
+  }
+
+  const publicEmail = trimText(fields.public_email);
+  const publicPhone = trimText(fields.public_phone);
+  if (fields.contact_mode === "public_contact") {
+    if (!publicEmail && !publicPhone) {
+      return { ok: false, error: "Public contact requires email or phone." };
+    }
+    if (publicEmail && !isValidEmail(publicEmail)) {
+      return { ok: false, error: "Invalid public email." };
+    }
+    if (publicPhone && !isValidPhone(publicPhone)) {
+      return { ok: false, error: "Invalid public phone." };
+    }
+  }
+
+  return {
+    ok: true,
+    value: {
+      price_sek: Math.round(price),
+      brand,
+      type: fields.type,
+      condition: fields.condition,
+      wheel_size_in: wheelSize,
+      features,
+      faults,
+      location,
+      contact_mode: fields.contact_mode,
+      public_email: publicEmail || null,
+      public_phone: publicPhone || null
+    }
+  };
+}
+
+export function validateBuyerContact(fields) {
+  const buyerEmail = trimText(fields.buyer_email);
+  const buyerPhone = trimText(fields.buyer_phone);
+  const message = trimText(fields.message);
+
+  if (!buyerEmail && !buyerPhone) {
+    return { ok: false, error: "Provide email or phone." };
+  }
+  if (buyerEmail && !isValidEmail(buyerEmail)) {
+    return { ok: false, error: "Invalid email." };
+  }
+  if (buyerPhone && !isValidPhone(buyerPhone)) {
+    return { ok: false, error: "Invalid phone." };
+  }
+  if (!message || message.length > LIMITS.maxMessageLength) {
+    return { ok: false, error: "Message is required." };
+  }
+
+  return {
+    ok: true,
+    value: {
+      buyer_email: buyerEmail || null,
+      buyer_phone: buyerPhone || null,
+      message
+    }
+  };
+}
+
+export function validateReport(fields) {
+  const reason = trimText(fields.reason);
+  const details = trimText(fields.details);
+  if (!reason) {
+    return { ok: false, error: "Reason is required." };
+  }
+  if (details.length > 300) {
+    return { ok: false, error: "Details too long." };
+  }
+  return { ok: true, value: { reason, details: details || null } };
+}
+
+export function validatePriceUpdate(fields) {
+  const price = toNumber(fields.new_price);
+  if (price === null || price < 0) {
+    return { ok: false, error: "Invalid price." };
+  }
+  return { ok: true, value: { new_price: Math.round(price) } };
+}
