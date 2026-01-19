@@ -92,6 +92,11 @@ If the `ALTER TABLE` line fails, it means the column already exists and you can 
    - `TOKEN_HASH_SALT` = a long random string (use a password manager)
    - `IP_HASH_SALT` = a long random string (different from the token salt)
    - `ADMIN_EMAILS` = your email from Cloudflare Access (optional, but recommended)
+3. If you see the message about variables being managed by `wrangler.toml`, that is normal:
+   - **Plain vars** like `PUBLIC_R2_BASE_URL` and `ADMIN_EMAILS` must be set in `wrangler.toml` and pushed to GitHub.
+   - **Secrets** can still be set in the dashboard. Use **Add variable** and choose **Secret** for:
+     `TURNSTILE_SECRET_KEY`, `TOKEN_HASH_SALT`, `IP_HASH_SALT`.
+   - If you cannot add a secret because it already exists, remove it from `wrangler.toml` (do not put secrets in Git).
 
 ## Step 8 - Update frontend config
 1. Open `assets/config.js`.

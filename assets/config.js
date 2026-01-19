@@ -7,7 +7,7 @@ window.APP_CONFIG = {
   apiBase: "",
   listingsUrl: "https://pub-1b1634891ffc417b84c11bd3eb2b1143.r2.dev/snapshots/listings.json",
   reportPhone: "0700500929",
-  turnstileSiteKey: "",
+  turnstileSiteKey: "0x4AAAAAACNbnZlp_RnFRCbS",
   maxImageCount: 2,
   maxMessageLength: 300
 };
