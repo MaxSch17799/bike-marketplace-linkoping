@@ -25,6 +25,7 @@ CREATE TABLE listings (
   public_email TEXT,
   public_phone TEXT,
   image_keys_json TEXT NOT NULL,
+  image_sizes_json TEXT NOT NULL DEFAULT '[]',
   status TEXT NOT NULL DEFAULT 'active',
   ip_hash TEXT,
   ip_stored_at INTEGER,
@@ -71,9 +72,25 @@ CREATE TABLE admin_actions (
   payload_json TEXT NOT NULL
 );
 
+CREATE TABLE usage_monthly (
+  period_key TEXT PRIMARY KEY,
+  period_start INTEGER NOT NULL,
+  class_a_ops INTEGER NOT NULL DEFAULT 0,
+  class_b_ops INTEGER NOT NULL DEFAULT 0,
+  api_requests INTEGER NOT NULL DEFAULT 0,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE usage_state (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
 CREATE INDEX idx_listings_status_expires ON listings(status, expires_at);
 CREATE INDEX idx_listings_rank_created ON listings(rank, created_at);
 CREATE INDEX idx_listings_seller ON listings(seller_id);
 CREATE INDEX idx_contacts_expires ON buyer_contacts(expires_at);
 CREATE INDEX idx_reports_status ON reports(status);
 CREATE INDEX idx_reports_listing ON reports(listing_id);
+CREATE INDEX idx_usage_monthly_start ON usage_monthly(period_start);

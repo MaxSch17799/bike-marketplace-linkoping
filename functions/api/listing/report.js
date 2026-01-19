@@ -4,8 +4,10 @@ import { readForm } from "../../_lib/request.js";
 import { ok, fail } from "../../_lib/response.js";
 import { verifyTurnstile } from "../../_lib/turnstile.js";
 import { validateReport } from "../../_lib/validation.js";
+import { recordApiRequest } from "../../_lib/usage.js";
 
 export async function onRequestPost({ request, env }) {
+  await recordApiRequest(env);
   await cleanup(env);
 
   const formResult = await readForm(request);

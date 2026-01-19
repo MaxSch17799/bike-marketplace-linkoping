@@ -2,10 +2,12 @@ import { cleanup } from "../../_lib/cleanup.js";
 import { readJson } from "../../_lib/request.js";
 import { ok, fail } from "../../_lib/response.js";
 import { isAdminRequest } from "../../_lib/security.js";
+import { recordApiRequest } from "../../_lib/usage.js";
 
 const allowedStatuses = ["under_review", "done"];
 
 export async function onRequestPost({ request, env }) {
+  await recordApiRequest(env);
   await cleanup(env);
 
   if (!isAdminRequest(request, env)) {

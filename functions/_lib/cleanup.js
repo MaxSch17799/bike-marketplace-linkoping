@@ -1,4 +1,5 @@
 import { TTL } from "./constants.js";
+import { adjustStorageBytes, recordClassA } from "./usage.js";
 
 function nowSeconds() {
   return Math.floor(Date.now() / 1000);
@@ -16,27 +17,37 @@ function parseJsonArray(value) {
   }
 }
 
-async function deleteListingImages(env, imageKeys) {
+function sumNumberArray(values) {
+  return values.reduce((sum, value) => sum + (Number(value) || 0), 0);
+}
+
+async function deleteListingImages(env, imageKeys, imageSizes) {
   if (!imageKeys.length) {
     return;
   }
   await env.PUBLIC_BUCKET.delete(imageKeys);
+  await recordClassA(env, imageKeys.length);
+  const totalBytes = sumNumberArray(imageSizes);
+  if (totalBytes > 0) {
+    await adjustStorageBytes(env, -totalBytes);
+  }
 }
 
 async function expireListings(env, now) {
   const expired = await env.DB.prepare(
-    "SELECT listing_id, image_keys_json FROM listings WHERE status = 'active' AND expires_at < ?"
+    "SELECT listing_id, image_keys_json, image_sizes_json FROM listings WHERE status = 'active' AND expires_at < ?"
   )
     .bind(now)
     .all();
 
   for (const listing of expired.results || []) {
     const imageKeys = parseJsonArray(listing.image_keys_json);
+    const imageSizes = parseJsonArray(listing.image_sizes_json);
     if (imageKeys.length) {
-      await deleteListingImages(env, imageKeys);
+      await deleteListingImages(env, imageKeys, imageSizes);
     }
     await env.DB.prepare(
-      "UPDATE listings SET status = 'expired', image_keys_json = '[]' WHERE listing_id = ?"
+      "UPDATE listings SET status = 'expired', image_keys_json = '[]', image_sizes_json = '[]' WHERE listing_id = ?"
     )
       .bind(listing.listing_id)
       .run();

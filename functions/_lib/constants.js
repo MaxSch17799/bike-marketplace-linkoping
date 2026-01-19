@@ -75,3 +75,19 @@ export const TTL = {
   ipHashDays: 30,
   reportDays: 365
 };
+
+export const BYTES_PER_GB = 1_000_000_000;
+
+export const R2_LIMITS = {
+  storageBytes: 10 * BYTES_PER_GB,
+  classAOps: 1_000_000,
+  classBOps: 10_000_000
+};
+
+export const R2_PRICING = {
+  storagePerGb: 0.015,
+  classAPerMillion: 4.5,
+  classBPerMillion: 0.36
+};
+
+export const USAGE_CUTOFF_FRACTION = 0.99;

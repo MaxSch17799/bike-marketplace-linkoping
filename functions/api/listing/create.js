@@ -7,6 +7,12 @@ import { ok, fail } from "../../_lib/response.js";
 import { verifyTurnstile } from "../../_lib/turnstile.js";
 import { createSeller, findSellerByToken } from "../../_lib/sellers.js";
 import { parseJsonArray, validateListingFields } from "../../_lib/validation.js";
+import {
+  adjustStorageBytes,
+  enforceUsageLimits,
+  recordApiRequest,
+  recordClassA
+} from "../../_lib/usage.js";
 
 function fileExtension(type) {
   if (type === "image/png") {
@@ -19,6 +25,7 @@ function fileExtension(type) {
 }
 
 export async function onRequestPost({ request, env }) {
+  await recordApiRequest(env);
   await cleanup(env);
 
   const formResult = await readForm(request);
@@ -30,6 +37,11 @@ export async function onRequestPost({ request, env }) {
   const { ip, ipHash } = await getIpContext(request, env);
   if (await isBlocked(env, ipHash)) {
     return fail(403, "Blocked.");
+  }
+
+  const limitCheck = await enforceUsageLimits(env);
+  if (!limitCheck.ok) {
+    return fail(429, limitCheck.error);
   }
 
   const turnstileToken = formData.get("cf_turnstile_response");
@@ -87,6 +99,7 @@ export async function onRequestPost({ request, env }) {
 
   let totalSize = 0;
   const imageKeys = [];
+  const imageSizes = [];
   for (const file of files) {
     totalSize += file.size;
     if (file.size > LIMITS.maxImageBytes) {
@@ -102,11 +115,14 @@ export async function onRequestPost({ request, env }) {
     await env.PUBLIC_BUCKET.put(key, file.stream(), {
       httpMetadata: { contentType: file.type }
     });
+    await recordClassA(env, 1);
+    await adjustStorageBytes(env, file.size);
     imageKeys.push(key);
+    imageSizes.push(file.size);
   }
 
   const insert = env.DB.prepare(
-    "INSERT INTO listings (listing_id, seller_id, created_at, expires_at, rank, price_sek, brand, type, condition, wheel_size_in, features_json, faults_json, location, contact_mode, public_email, public_phone, image_keys_json, status, ip_hash, ip_stored_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)"
+    "INSERT INTO listings (listing_id, seller_id, created_at, expires_at, rank, price_sek, brand, type, condition, wheel_size_in, features_json, faults_json, location, contact_mode, public_email, public_phone, image_keys_json, image_sizes_json, status, ip_hash, ip_stored_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)"
   );
 
   await insert
@@ -128,6 +144,7 @@ export async function onRequestPost({ request, env }) {
       validation.value.public_email,
       validation.value.public_phone,
       JSON.stringify(imageKeys),
+      JSON.stringify(imageSizes),
       ipHash,
       ipHash ? now : null
     )

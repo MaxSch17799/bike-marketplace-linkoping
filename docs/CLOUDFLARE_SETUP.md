@@ -13,10 +13,13 @@ This guide is written for someone who is not very technical. Follow the steps sl
 4. Enable **Public Access** for the bucket (needed for images and `listings.json`).
 5. Copy the public URL. It looks like `https://<bucket>.r2.dev` or your custom domain.
 6. Create a tiny starter file so the site can load even before any listing exists:
-   - Create a local file called `listings.json` with this content:
-     `{ "generated_at": 0, "listings": [] }`
-   - Upload it to the bucket path `snapshots/listings.json`.
-7. In R2, open **CORS** settings and allow your Pages domain (example: `https://your-project.pages.dev`).
+   - A starter file already exists in your project at `snapshots/listings.json`.
+   - In the R2 bucket, click **Create folder** and name it `snapshots`.
+   - Open the `snapshots` folder and upload the local `snapshots/listings.json` file.
+7. In R2, open **CORS** settings and add:
+   - **Allowed origins:** your Pages domain (example: `https://your-project.pages.dev`)
+   - **Allowed methods:** `GET`, `HEAD`
+   - **Allowed headers:** `*`
 
 ## Step 3 - Create the D1 database
 1. In Cloudflare Dashboard, click **D1**.
@@ -26,12 +29,40 @@ This guide is written for someone who is not very technical. Follow the steps sl
 5. Open `db/schema.sql` from your project folder and copy its contents.
 6. Paste the SQL into the D1 Console and run it.
 
+### If you already created the database earlier
+Run these extra commands in the D1 Console:
+
+```
+ALTER TABLE listings ADD COLUMN image_sizes_json TEXT NOT NULL DEFAULT '[]';
+
+CREATE TABLE IF NOT EXISTS usage_monthly (
+  period_key TEXT PRIMARY KEY,
+  period_start INTEGER NOT NULL,
+  class_a_ops INTEGER NOT NULL DEFAULT 0,
+  class_b_ops INTEGER NOT NULL DEFAULT 0,
+  api_requests INTEGER NOT NULL DEFAULT 0,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS usage_state (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_usage_monthly_start ON usage_monthly(period_start);
+```
+
+If the `ALTER TABLE` line fails, it means the column already exists and you can ignore the error.
+
 ## Step 4 - Create a Turnstile widget
-1. In Cloudflare Dashboard, click **Turnstile**.
-2. Click **Add site**.
-3. Name it `bike-marketplace-linkoping`.
-4. Add your domain (you can add the Cloudflare Pages domain now and your custom domain later).
-5. Save it and copy the **Site Key** and **Secret Key**.
+1. In Cloudflare Dashboard, use the top search bar and type **Turnstile**.
+2. Click **Turnstile** in the results. (If you do not see it, try `https://dash.cloudflare.com/?to=turnstile`.)
+3. If you still cannot see it, look under **Security** -> **Turnstile** in the left menu.
+4. Click **Add site**.
+5. Name it `bike-marketplace-linkoping`.
+6. Add your domain (you can add the Cloudflare Pages domain now and your custom domain later).
+7. Save it and copy the **Site Key** and **Secret Key**.
 
 ## Step 5 - Create a Cloudflare Pages project
 1. In Cloudflare Dashboard, click **Pages**.
@@ -56,7 +87,7 @@ This guide is written for someone who is not very technical. Follow the steps sl
 ## Step 7 - Add environment variables
 1. In your Pages project, click **Settings** -> **Environment variables**.
 2. Add these variables (production):
-   - `PUBLIC_R2_BASE_URL` = your R2 public URL (example: `https://<bucket>.r2.dev`)
+   - `PUBLIC_R2_BASE_URL` = your R2 public URL (yours is `https://pub-1b1634891ffc417b84c11bd3eb2b1143.r2.dev`)
    - `TURNSTILE_SECRET_KEY` = your Turnstile secret key
    - `TOKEN_HASH_SALT` = a long random string (use a password manager)
    - `IP_HASH_SALT` = a long random string (different from the token salt)
@@ -67,6 +98,7 @@ This guide is written for someone who is not very technical. Follow the steps sl
 2. Set:
    - `turnstileSiteKey` to your Turnstile **Site Key**
    - `listingsUrl` to `${PUBLIC_R2_BASE_URL}/snapshots/listings.json`
+   - It is already set to your current R2 URL. Update it only if you change the bucket domain.
 3. Save and push the change to GitHub.
 
 ## Step 9 - Protect /admin with Cloudflare Access

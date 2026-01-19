@@ -5,8 +5,10 @@ import { readJson } from "../../_lib/request.js";
 import { ok, fail } from "../../_lib/response.js";
 import { findSellerByToken } from "../../_lib/sellers.js";
 import { validatePriceUpdate } from "../../_lib/validation.js";
+import { enforceUsageLimits, recordApiRequest } from "../../_lib/usage.js";
 
 export async function onRequestPost({ request, env }) {
+  await recordApiRequest(env);
   await cleanup(env);
 
   const payloadResult = await readJson(request);
@@ -18,6 +20,11 @@ export async function onRequestPost({ request, env }) {
   const { ipHash } = await getIpContext(request, env);
   if (await isBlocked(env, ipHash)) {
     return fail(403, "Blocked.");
+  }
+
+  const limitCheck = await enforceUsageLimits(env);
+  if (!limitCheck.ok) {
+    return fail(429, limitCheck.error);
   }
 
   const validation = validatePriceUpdate(payload);

@@ -4,8 +4,10 @@ import { getIpContext, isBlocked } from "../../_lib/blocklist.js";
 import { readJson } from "../../_lib/request.js";
 import { ok, fail } from "../../_lib/response.js";
 import { findSellerByToken } from "../../_lib/sellers.js";
+import { recordApiRequest } from "../../_lib/usage.js";
 
 export async function onRequestPost({ request, env }) {
+  await recordApiRequest(env);
   await cleanup(env);
 
   const payloadResult = await readJson(request);

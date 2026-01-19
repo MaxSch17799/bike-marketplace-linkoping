@@ -85,6 +85,10 @@ const state = {
   listingsError: null
 };
 
+const adminState = {
+  tab: "overview"
+};
+
 const app = document.getElementById("app");
 
 function qs(selector, root = document) {
@@ -123,6 +127,51 @@ function formatDateTime(seconds) {
     hour: "2-digit",
     minute: "2-digit"
   });
+}
+
+function formatNumber(value) {
+  const numberValue = Number(value);
+  if (!Number.isFinite(numberValue)) {
+    return "-";
+  }
+  return new Intl.NumberFormat("sv-SE").format(numberValue);
+}
+
+function formatMoney(value) {
+  const numberValue = Number(value);
+  if (!Number.isFinite(numberValue)) {
+    return "-";
+  }
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 2
+  }).format(numberValue);
+}
+
+function formatPercent(value) {
+  const numberValue = Number(value);
+  if (!Number.isFinite(numberValue)) {
+    return "-";
+  }
+  return `${(numberValue * 100).toFixed(1)}%`;
+}
+
+function formatBytes(bytes) {
+  const numberValue = Number(bytes);
+  if (!Number.isFinite(numberValue)) {
+    return "-";
+  }
+  if (numberValue >= 1_000_000_000) {
+    return `${(numberValue / 1_000_000_000).toFixed(2)} GB`;
+  }
+  if (numberValue >= 1_000_000) {
+    return `${(numberValue / 1_000_000).toFixed(2)} MB`;
+  }
+  if (numberValue >= 1_000) {
+    return `${(numberValue / 1_000).toFixed(2)} KB`;
+  }
+  return `${numberValue} B`;
 }
 
 function setNotice(target, message, type = "") {
@@ -918,15 +967,38 @@ function renderAdmin() {
   setActiveNav("/admin");
   app.innerHTML = `
     <section class="section">
-      <div class="section-title">Admin overview</div>
+      <div class="section-title">Admin</div>
+      <div class="tab-row">
+        <button class="tab ${adminState.tab === "overview" ? "active" : ""}" data-tab="overview">Overview</button>
+        <button class="tab ${adminState.tab === "analytics" ? "active" : ""}" data-tab="analytics">Analytics</button>
+      </div>
       <div id="adminNotice"></div>
       <div id="adminContent"></div>
     </section>
   `;
-  loadAdmin();
+
+  qsa("button[data-tab]", app).forEach((button) => {
+    button.addEventListener("click", () => {
+      const tab = button.dataset.tab;
+      if (tab && tab !== adminState.tab) {
+        adminState.tab = tab;
+        renderAdmin();
+      }
+    });
+  });
+
+  loadAdminTab(adminState.tab);
 }
 
-async function loadAdmin() {
+function loadAdminTab(tab) {
+  if (tab === "analytics") {
+    loadAdminAnalytics();
+  } else {
+    loadAdminOverview();
+  }
+}
+
+async function loadAdminOverview() {
   const notice = qs("#adminNotice");
   const content = qs("#adminContent");
   setNotice(notice, "Loading...");
@@ -1050,7 +1122,7 @@ async function loadAdmin() {
       }
       const result = await apiPostJson("/api/admin/delete-listing", { listing_id: button.dataset.id });
       if (result.ok) {
-        loadAdmin();
+        loadAdminOverview();
       } else {
         alert(result.error || "Could not delete listing.");
       }
@@ -1103,7 +1175,7 @@ async function loadAdmin() {
       const reportId = button.dataset.id;
       const result = await apiPostJson("/api/admin/report-status", { report_id: reportId, status: "done" });
       if (result.ok) {
-        loadAdmin();
+        loadAdminOverview();
       } else {
         alert(result.error || "Could not mark done.");
       }
@@ -1111,6 +1183,101 @@ async function loadAdmin() {
   });
 
   closeReportView.addEventListener("click", () => reportModal.classList.remove("active"));
+}
+
+async function loadAdminAnalytics() {
+  const notice = qs("#adminNotice");
+  const content = qs("#adminContent");
+  setNotice(notice, "Loading...");
+
+  const response = await apiGet("/api/admin/usage");
+  if (!response.ok) {
+    setNotice(notice, response.error || "Could not load analytics.", "error");
+    return;
+  }
+  setNotice(notice, "", "");
+
+  const usage = response.usage || {};
+  const limits = response.limits || {};
+  const cutoff = response.cutoff || {};
+  const estimate = response.estimate || {};
+
+  const classAPercent = limits.class_a_ops ? usage.class_a_ops / limits.class_a_ops : 0;
+  const classBPercent = limits.class_b_ops ? usage.class_b_ops / limits.class_b_ops : 0;
+  const storagePercent = limits.storage_bytes ? usage.storage_bytes / limits.storage_bytes : 0;
+  const totalRequests = (usage.class_a_ops || 0) + (usage.class_b_ops || 0);
+
+  const statusClass = response.blocked && !response.override_enabled ? "error" : "ok";
+  const statusText = response.blocked && !response.override_enabled ? "Paused" : "Active";
+  const statusDetail = response.override_enabled
+    ? "Override enabled"
+    : response.blocked
+      ? "Limit nearly reached"
+      : "Within free tier";
+
+  const resetLabel = response.reset_at ? formatDateTime(response.reset_at) : "-";
+  const cutoffPercent = formatPercent(limits.cutoff_fraction ?? 0.99);
+
+  content.innerHTML = `
+    <div class="section">
+      <div class="card">
+        <div class="section-title">Service status</div>
+        <div class="helper">Monthly reset: ${resetLabel}</div>
+        <div class="notice ${statusClass}">${statusText} - ${statusDetail}</div>
+        <div class="inline-actions">
+          <button class="button ${response.override_enabled ? "secondary" : ""}" id="usageOverride" data-enabled="${response.override_enabled}">
+            ${response.override_enabled ? "Disable override" : "Enable override"}
+          </button>
+        </div>
+        <div class="helper">Cutoff triggers at ${cutoffPercent} of the free tier.</div>
+      </div>
+
+      <div class="card-grid">
+        <div class="card">
+          <div class="card-title">R2 requests this month</div>
+          <div>Class A: ${formatNumber(usage.class_a_ops)} / ${formatNumber(limits.class_a_ops)} (${formatPercent(classAPercent)})</div>
+          <div>Class B: ${formatNumber(usage.class_b_ops)} / ${formatNumber(limits.class_b_ops)} (${formatPercent(classBPercent)})</div>
+          <div>Total: ${formatNumber(totalRequests)}</div>
+          <div class="helper">API requests tracked: ${formatNumber(usage.api_requests)}</div>
+          <div class="helper">Cutoff: ${formatNumber(cutoff.class_a_ops)} / ${formatNumber(cutoff.class_b_ops)}</div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Storage</div>
+          <div>Stored: ${formatBytes(usage.storage_bytes)} (${formatPercent(storagePercent)})</div>
+          <div>Free tier: ${formatBytes(limits.storage_bytes)}</div>
+          <div class="helper">Cutoff: ${formatBytes(cutoff.storage_bytes)}</div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Estimated cost (USD)</div>
+          <div>Storage: ${formatMoney(estimate.storage_cost)}</div>
+          <div>Class A: ${formatMoney(estimate.class_a_cost)}</div>
+          <div>Class B: ${formatMoney(estimate.class_b_cost)}</div>
+          <div class="card-price">${formatMoney(estimate.total_cost)}</div>
+          <div class="helper">Based on Cloudflare R2 pricing.</div>
+        </div>
+      </div>
+
+      <div class="notice">${response.note || "Estimated usage only."}</div>
+    </div>
+  `;
+
+  const overrideButton = qs("#usageOverride");
+  if (overrideButton) {
+    overrideButton.addEventListener("click", async () => {
+      overrideButton.disabled = true;
+      const nextEnabled = overrideButton.dataset.enabled !== "true";
+      const result = await apiPostJson("/api/admin/usage-override", { enabled: nextEnabled });
+      if (result.ok) {
+        adminState.tab = "analytics";
+        renderAdmin();
+      } else {
+        overrideButton.disabled = false;
+        alert(result.error || "Could not update override.");
+      }
+    });
+  }
 }
 
 function renderNotFound() {

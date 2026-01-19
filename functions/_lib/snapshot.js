@@ -1,3 +1,5 @@
+import { recordClassA, setSnapshotBytes } from "./usage.js";
+
 function nowSeconds() {
   return Math.floor(Date.now() / 1000);
 }
@@ -59,10 +61,13 @@ export async function buildPublicSnapshot(env) {
   });
 
   const payload = JSON.stringify({ generated_at: now, listings });
+  const payloadBytes = new TextEncoder().encode(payload).length;
   await env.PUBLIC_BUCKET.put("snapshots/listings.json", payload, {
     httpMetadata: {
       contentType: "application/json",
       cacheControl: "public, max-age=60"
     }
   });
+  await recordClassA(env, 1);
+  await setSnapshotBytes(env, payloadBytes);
 }

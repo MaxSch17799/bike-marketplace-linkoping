@@ -4,6 +4,7 @@ import { getIpContext, isBlocked } from "../../_lib/blocklist.js";
 import { readJson } from "../../_lib/request.js";
 import { ok, fail } from "../../_lib/response.js";
 import { findSellerByToken } from "../../_lib/sellers.js";
+import { adjustStorageBytes, enforceUsageLimits, recordApiRequest, recordClassA } from "../../_lib/usage.js";
 
 function parseJsonArray(value) {
   if (!value) {
@@ -18,6 +19,7 @@ function parseJsonArray(value) {
 }
 
 export async function onRequestPost({ request, env }) {
+  await recordApiRequest(env);
   await cleanup(env);
 
   const payloadResult = await readJson(request);
@@ -31,13 +33,18 @@ export async function onRequestPost({ request, env }) {
     return fail(403, "Blocked.");
   }
 
+  const limitCheck = await enforceUsageLimits(env);
+  if (!limitCheck.ok) {
+    return fail(429, limitCheck.error);
+  }
+
   const seller = await findSellerByToken(env, payload.seller_token);
   if (!seller) {
     return fail(401, "Invalid seller token.");
   }
 
   const listing = await env.DB.prepare(
-    "SELECT listing_id, image_keys_json FROM listings WHERE listing_id = ? AND seller_id = ?"
+    "SELECT listing_id, image_keys_json, image_sizes_json FROM listings WHERE listing_id = ? AND seller_id = ?"
   )
     .bind(payload.listing_id, seller.seller_id)
     .first();
@@ -47,8 +54,14 @@ export async function onRequestPost({ request, env }) {
   }
 
   const imageKeys = parseJsonArray(listing.image_keys_json);
+  const imageSizes = parseJsonArray(listing.image_sizes_json);
   if (imageKeys.length) {
     await env.PUBLIC_BUCKET.delete(imageKeys);
+    await recordClassA(env, imageKeys.length);
+    const totalBytes = imageSizes.reduce((sum, value) => sum + (Number(value) || 0), 0);
+    if (totalBytes > 0) {
+      await adjustStorageBytes(env, -totalBytes);
+    }
   }
 
   await env.DB.prepare("DELETE FROM buyer_contacts WHERE listing_id = ?")
