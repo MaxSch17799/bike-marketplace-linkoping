@@ -34,45 +34,64 @@ body {
 .site-header {
   padding: 20px 24px;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: space-between;
+  gap: 16px;
   border-bottom: 1px solid var(--line);
   background: linear-gradient(135deg, #fbfaf8, #f2f3f1);
 }
 
 .brand {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
 }
 
-.brand-mark {
-  font-family: "IBM Plex Mono", monospace;
-  text-transform: uppercase;
-  letter-spacing: 0.16em;
-  font-size: 12px;
+.brand-logo {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  object-fit: cover;
+}
+
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.brand-title {
+  font-size: clamp(14px, 2.4vw, 16px);
+  font-weight: 600;
+  letter-spacing: 0.02em;
   color: var(--muted);
+  text-transform: uppercase;
 }
 
 .brand-sub {
-  font-size: 20px;
+  font-size: clamp(16px, 3vw, 22px);
   font-weight: 600;
 }
 
 .nav {
   display: flex;
-  gap: 16px;
+  gap: clamp(8px, 2vw, 16px);
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .nav a {
   text-decoration: none;
   color: var(--muted);
-  padding: 8px 10px;
+  padding: clamp(6px, 1.8vw, 8px) clamp(8px, 2.4vw, 10px);
   border-radius: 10px;
   font-weight: 500;
+  font-size: clamp(12px, 2.6vw, 14px);
 }
 
 .nav a.active {
@@ -417,17 +436,12 @@ textarea {
     grid-template-columns: 1fr;
   }
 
-  .nav {
-    width: 100%;
-    justify-content: flex-start;
+  .site-header {
+    padding: 16px;
   }
 }
 
 @media (max-width: 640px) {
-  .site-header {
-    padding: 16px;
-  }
-
   .app {
     padding: 16px;
   }

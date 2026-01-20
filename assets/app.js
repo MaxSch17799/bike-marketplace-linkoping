@@ -216,6 +216,9 @@ function getRoute() {
   if (path === "/sell") {
     return { name: "sell", path };
   }
+  if (path === "/about") {
+    return { name: "about", path };
+  }
   if (path === "/dashboard") {
     return { name: "dashboard", path };
   }
@@ -281,11 +284,11 @@ function sortListings(listings, sortMode) {
 function renderHome() {
   setActiveNav("/");
   app.innerHTML = `
-    <section class="section">
-      <div class="section-header">
-        <div class="section-title">Browse bikes</div>
-        <label>
-          Sort
+      <section class="section">
+        <div class="section-header">
+          <div class="section-title">Browse bikes</div>
+          <label>
+            Sort
           <select id="sortSelect">
             <option value="rank">Recommended</option>
             <option value="newest">Newest</option>
@@ -293,12 +296,13 @@ function renderHome() {
             <option value="cheapest">Cheapest</option>
             <option value="expensive">Most expensive</option>
           </select>
-        </label>
-      </div>
-      <div id="homeNotice"></div>
-      <div class="card-grid" id="listingGrid"></div>
-    </section>
-  `;
+          </label>
+        </div>
+        <div class="helper">Browse local listings in Linköping. Open a bike to see details and contact the seller.</div>
+        <div id="homeNotice"></div>
+        <div class="card-grid" id="listingGrid"></div>
+      </section>
+    `;
 
   const sortSelect = qs("#sortSelect");
   const notice = qs("#homeNotice");
@@ -560,10 +564,35 @@ function renderSell() {
   app.innerHTML = `
     <section class="section">
       <div class="section-title">Sell a bike</div>
-      <div class="notice">
-        This listing will be deleted within 39 days unless you log in to your dashboard.
+      <div class="helper">Choose the option that fits your situation.</div>
+      <div class="card-grid">
+        <div class="card">
+          <div class="card-title">Guaranteed sale</div>
+          <div class="helper">
+            We will offer you a low but fair instant quote and pick up your bike on short notice if you are in a pickle.
+          </div>
+          <div class="inline-actions">
+            <a class="button" href="https://webuyyourbike.pages.dev" target="_blank" rel="noopener">Get instant quote</a>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">Sell on marketplace</div>
+          <div class="helper">
+            Create a new listing. No login required. We give you a secret, private key to manage your listing later.
+          </div>
+          <div class="inline-actions">
+            <button class="button secondary" id="toggleSellForm" aria-expanded="false" aria-controls="sellFormSection">
+              Create listing
+            </button>
+          </div>
+        </div>
       </div>
-      <div class="card">
+
+      <div class="card" id="sellFormSection" hidden>
+        <div class="section-title">Sell on marketplace</div>
+        <div class="notice">
+          This listing will be deleted within 39 days unless you log in to your dashboard.
+        </div>
         <div class="section-title">Seller token</div>
         <div class="form-row">
           <label>
@@ -575,17 +604,22 @@ function renderSell() {
             <button class="button ghost" id="clearToken">Clear token</button>
           </div>
         </div>
-        <div class="helper">Store your token safely. It is the only way to manage listings.</div>
-      </div>
+        <div class="helper">
+          If you already have a token, paste it here so all listings stay under the same dashboard login.
+        </div>
+        <div class="helper">
+          Store your token safely. It is the only way to manage listings.
+        </div>
 
-      <div class="card">
-        <div class="section-title">Create new listing</div>
         <div id="sellNotice"></div>
         <form class="form" id="sellForm">
           <label>
             Seller token (optional)
             <input type="text" name="seller_token" value="${savedToken}" />
           </label>
+          <div class="helper">
+            If you leave this blank, we will create a new token and show it after you post.
+          </div>
           <div class="form-row">
             <label>
               Price (SEK)
@@ -662,6 +696,7 @@ function renderSell() {
                 <input type="radio" name="contact_mode" value="public_contact" /> Public contact
               </label>
             </div>
+            <div class="helper">Buyer message keeps your contact info private.</div>
           </div>
 
           <div id="publicContactFields" style="display: none;">
@@ -690,6 +725,20 @@ function renderSell() {
       </div>
     </section>
   `;
+
+  const toggleButton = qs("#toggleSellForm");
+  const sellFormSection = qs("#sellFormSection");
+  toggleButton.addEventListener("click", () => {
+    const isHidden = sellFormSection.hasAttribute("hidden");
+    if (isHidden) {
+      sellFormSection.removeAttribute("hidden");
+      toggleButton.setAttribute("aria-expanded", "true");
+      sellFormSection.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else {
+      sellFormSection.setAttribute("hidden", "");
+      toggleButton.setAttribute("aria-expanded", "false");
+    }
+  });
 
   const tokenInput = qs("#sellerTokenInput");
   qs("#openDashboard").addEventListener("click", () => {
@@ -1005,7 +1054,15 @@ async function loadAdminOverview() {
 
   const response = await apiGet("/api/admin/overview");
   if (!response.ok) {
-    setNotice(notice, response.error || "Could not load admin data.", "error");
+    if (response.error === "Forbidden.") {
+      setNotice(
+        notice,
+        "Forbidden. Check that Cloudflare Access protects both `/admin` and `/api/admin/*` for your domain.",
+        "error"
+      );
+    } else {
+      setNotice(notice, response.error || "Could not load admin data.", "error");
+    }
     return;
   }
   setNotice(notice, "", "");
@@ -1280,6 +1337,47 @@ async function loadAdminAnalytics() {
   }
 }
 
+function renderAbout() {
+  setActiveNav("/about");
+  app.innerHTML = `
+    <section class="section">
+      <div class="section-title">About</div>
+      <div class="card">
+        <div class="card-title">About this marketplace</div>
+        <div class="helper">
+          This is a simple, local marketplace for bikes in Linköping. Browse listings, open a bike, and contact the seller.
+          Sellers can post a listing without creating an account.
+        </div>
+        <div class="helper">
+          Buyers: open a listing and either use the contact form or the public contact details.
+          Sellers: create a listing and keep your seller token to manage price or delete the listing later.
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">About us</div>
+        <div class="helper">
+          We are locals who want a clean and easy way to buy and sell bikes without noise or paywalls.
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Q&A</div>
+        <div class="notice">
+          <div><strong>Do I need an account?</strong> No. You get a private seller token instead.</div>
+          <div><strong>How long does a listing stay?</strong> 39 days by default, extended when you open your dashboard.</div>
+          <div><strong>How do I remove a listing?</strong> Use your seller token in the dashboard to delete it.</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">About privacy</div>
+        <div class="helper">
+          We do not want sensitive personal information posted here. Buyer contact messages and IP hashes are removed after 30 days.
+          Listings expire automatically and are removed after the expiry buffer. Reports are kept up to one year for safety review.
+        </div>
+      </div>
+    </section>
+  `;
+}
+
 function renderNotFound() {
   setActiveNav("");
   app.innerHTML = `<div class="empty">Page not found. <a href="/">Back to browse</a></div>`;
@@ -1300,6 +1398,9 @@ async function renderRoute() {
       break;
     case "sell":
       renderSell();
+      break;
+    case "about":
+      renderAbout();
       break;
     case "dashboard":
       renderDashboard();

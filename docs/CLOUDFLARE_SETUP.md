@@ -111,7 +111,8 @@ If the `ALTER TABLE` line fails, it means the column already exists and you can 
 2. Go to **Access** -> **Applications** -> **Add an application**.
 3. Choose **Self-hosted**.
 4. Add your Pages domain and set the path to `/admin`.
-5. Create an access policy so only you can log in.
+5. Add a second public hostname for the same domain with path `/api/admin*` so the API calls are protected too.
+6. Create an access policy so only you can log in.
 
 ## Step 10 - Test the site
 1. Open your Pages URL on a phone and on a computer.
