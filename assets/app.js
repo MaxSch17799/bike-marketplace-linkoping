@@ -508,7 +508,11 @@ function renderListingDetail(route) {
 
   const reportButton = qs("button[data-action='report']");
   const reportModal = qs("#reportModal");
-  reportButton.addEventListener("click", () => reportModal.classList.add("active"));
+  const reportForm = qs("#reportForm");
+  reportButton.addEventListener("click", () => {
+    reportModal.classList.add("active");
+    setupTurnstile(reportForm);
+  });
   qs("button[data-action='close-report']").addEventListener("click", () => reportModal.classList.remove("active"));
 
   const thumbs = qs("#thumbs");
@@ -521,10 +525,9 @@ function renderListingDetail(route) {
     });
   }
 
-  setupTurnstile(app);
-
   const contactForm = qs("#contactForm");
   if (contactForm) {
+    setupTurnstile(contactForm);
     contactForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       const notice = qs("#contactNotice");
@@ -549,7 +552,6 @@ function renderListingDetail(route) {
     });
   }
 
-  const reportForm = qs("#reportForm");
   reportForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     const formData = new FormData(reportForm);
@@ -769,6 +771,7 @@ function renderSell() {
     if (isHidden) {
       sellFormSection.removeAttribute("hidden");
       toggleButton.setAttribute("aria-expanded", "true");
+      setupTurnstile(sellFormSection);
       sellFormSection.scrollIntoView({ behavior: "smooth", block: "start" });
     } else {
       sellFormSection.setAttribute("hidden", "");
@@ -804,8 +807,6 @@ function renderSell() {
       }
     }
   });
-
-  setupTurnstile(app);
 
   const sellForm = qs("#sellForm");
   sellForm.addEventListener("submit", async (event) => {
@@ -1545,7 +1546,15 @@ async function apiPostForm(path, formData) {
     method: "POST",
     body: formData
   });
-  return response.json();
+  const text = await response.text();
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    return {
+      ok: false,
+      error: response.ok ? "Unexpected response from the server." : `Server error (${response.status}).`
+    };
+  }
 }
 
 async function apiGet(path) {
