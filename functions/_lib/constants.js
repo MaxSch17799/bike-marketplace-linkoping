@@ -65,7 +65,7 @@ export const LIMITS = {
   maxImageBytes: 1200000,
   maxTotalUploadBytes: 3000000,
   maxBrandLength: 40,
-  maxDescriptionLength: 100
+  maxDescriptionLength: 150
 };
 
 export const TTL = {

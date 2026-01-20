@@ -666,8 +666,8 @@ function renderSell() {
             </div>
 
             <label>
-              Description (optional, max 100 chars)
-              <textarea name="description" maxlength="100" placeholder="Short description"></textarea>
+              Description (optional, max 150 chars)
+              <textarea name="description" maxlength="150" placeholder="Short description"></textarea>
             </label>
 
           <div>

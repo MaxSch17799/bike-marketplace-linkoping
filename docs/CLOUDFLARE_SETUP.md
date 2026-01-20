@@ -109,6 +109,15 @@ If the `ALTER TABLE` line fails, it means the column already exists and you can 
    - It is already set to your current R2 URL. Update it only if you change the bucket domain.
 3. Save and push the change to GitHub.
 
+### If Turnstile stops working after changes
+1. Cloudflare Dashboard -> **Turnstile** -> open your widget.
+2. Under **Allowed hostnames**, add your Pages domain, for example:
+   `bike-marketplace-linkoping.pages.dev`
+3. Confirm the **Site Key** in `assets/config.js` matches that widget.
+4. In Pages -> **Settings** -> **Environment variables** -> **Secrets**,
+   ensure `TURNSTILE_SECRET_KEY` matches the same widget.
+5. Save and wait 1-2 minutes, then hard refresh the site.
+
 ## Step 9 - Protect /admin with Cloudflare Access
 1. In Cloudflare Dashboard, click **Zero Trust** (you may need to enable it once).
 2. Go to **Access** -> **Applications** -> **Add an application**.
