@@ -1013,6 +1013,9 @@ function renderSell() {
       lastSubmissionHadImages = submissionHadImages;
       cooldownUntil = Date.now() + 20000;
       startCooldownTimer();
+      setTimeout(() => {
+        refreshListings().catch(() => {});
+      }, 1000);
     } else {
       setNotice(notice, response.error || "Could not create listing.", "error");
     }
@@ -1225,6 +1228,11 @@ async function loadDashboard(token) {
         listing_id: button.dataset.id
       });
       if (result.ok) {
+        if (result.already_deleted) {
+          alert("Listing already deleted.");
+        } else if (!result.deleted) {
+          alert("Listing removed from public view.");
+        }
         await refreshListings();
         loadDashboard(token);
       } else {
@@ -1292,6 +1300,9 @@ async function loadAdminOverview() {
   const listings = response.listings || [];
   const reports = response.reports || [];
   const contacts = response.contacts || [];
+  const sellerContacts = listings.filter(
+    (listing) => listing.public_email || listing.public_phone
+  );
 
   content.innerHTML = `
     <div class="section">
@@ -1347,6 +1358,28 @@ async function loadAdminOverview() {
             )
             .join("")
         : `<div class="empty">No reports.</div>`}
+    </div>
+
+    <div class="section">
+      <div class="section-title">Seller contacts</div>
+      <div class="helper">Shown when sellers choose public contact info.</div>
+      ${sellerContacts.length
+        ? sellerContacts
+            .map(
+              (listing) => `
+                <div class="card">
+                  <div class="card-header">
+                    <div class="card-title">${listing.brand || "Bike"}</div>
+                    <div class="helper">${listing.listing_id}</div>
+                  </div>
+                  <div>Email: ${listing.public_email || "-"}</div>
+                  <div>Phone: ${listing.public_phone || "-"}</div>
+                  <div class="helper">${listing.contact_mode}</div>
+                </div>
+              `
+            )
+            .join("")
+        : `<div class="empty">No seller contacts.</div>`}
     </div>
 
     <div class="section">
