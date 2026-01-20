@@ -50,9 +50,9 @@ body {
 }
 
 .brand-logo {
-  height: 2.2em;
-  width: 2.2em;
-  max-height: 56px;
+  height: 6.6em;
+  width: 6.6em;
+  max-height: 168px;
   border-radius: 12px;
   object-fit: cover;
   flex: 0 0 auto;

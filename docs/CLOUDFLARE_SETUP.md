@@ -34,6 +34,9 @@ Run these extra commands in the D1 Console:
 
 ```
 ALTER TABLE listings ADD COLUMN image_sizes_json TEXT NOT NULL DEFAULT '[]';
+ALTER TABLE listings ADD COLUMN description TEXT;
+ALTER TABLE listings ADD COLUMN delivery_possible INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE listings ADD COLUMN delivery_price_sek INTEGER;
 
 CREATE TABLE IF NOT EXISTS usage_monthly (
   period_key TEXT PRIMARY KEY,

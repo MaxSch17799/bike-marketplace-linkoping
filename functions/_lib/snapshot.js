@@ -30,7 +30,7 @@ function buildImageUrls(baseUrl, keys) {
 export async function buildPublicSnapshot(env) {
   const now = nowSeconds();
   const result = await env.DB.prepare(
-    "SELECT listing_id, created_at, expires_at, rank, price_sek, brand, type, condition, wheel_size_in, features_json, faults_json, location, contact_mode, public_email, public_phone, image_keys_json FROM listings WHERE status = 'active' AND expires_at >= ?"
+    "SELECT listing_id, created_at, expires_at, rank, price_sek, brand, type, condition, wheel_size_in, features_json, faults_json, location, description, delivery_possible, delivery_price_sek, contact_mode, public_email, public_phone, image_keys_json FROM listings WHERE status = 'active' AND expires_at >= ?"
   )
     .bind(now)
     .all();
@@ -53,6 +53,9 @@ export async function buildPublicSnapshot(env) {
       features,
       faults,
       location: row.location,
+      description: row.description,
+      delivery_possible: row.delivery_possible ? 1 : 0,
+      delivery_price_sek: row.delivery_price_sek,
       contact_mode: row.contact_mode,
       public_email: row.contact_mode === "public_contact" ? row.public_email : null,
       public_phone: row.contact_mode === "public_contact" ? row.public_phone : null,

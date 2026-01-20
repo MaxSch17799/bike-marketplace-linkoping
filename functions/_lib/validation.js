@@ -70,6 +70,11 @@ export function validateListingFields(fields) {
     return { ok: false, error: "Invalid location." };
   }
 
+  const description = trimText(fields.description);
+  if (description.length > LIMITS.maxDescriptionLength) {
+    return { ok: false, error: "Description is too long." };
+  }
+
   if (!CONTACT_MODES.includes(fields.contact_mode)) {
     return { ok: false, error: "Invalid contact mode." };
   }
@@ -98,6 +103,19 @@ export function validateListingFields(fields) {
     }
   }
 
+  const deliveryFlag = String(fields.delivery_possible || "").toLowerCase();
+  const deliveryPossible =
+    deliveryFlag === "yes" || deliveryFlag === "true" || deliveryFlag === "1";
+  let deliveryPrice = toNumber(fields.delivery_price_sek);
+  if (deliveryPossible) {
+    if (deliveryPrice === null || deliveryPrice < 0) {
+      return { ok: false, error: "Delivery price is required." };
+    }
+    deliveryPrice = Math.round(deliveryPrice);
+  } else {
+    deliveryPrice = null;
+  }
+
   return {
     ok: true,
     value: {
@@ -109,6 +127,9 @@ export function validateListingFields(fields) {
       features,
       faults,
       location,
+      description: description || null,
+      delivery_possible: deliveryPossible ? 1 : 0,
+      delivery_price_sek: deliveryPrice,
       contact_mode: fields.contact_mode,
       public_email: publicEmail || null,
       public_phone: publicPhone || null
