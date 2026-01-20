@@ -18,11 +18,26 @@ function buildImageUrls(baseUrl, keys) {
   if (!keys.length) {
     return [];
   }
-  if (!baseUrl) {
-    return keys;
-  }
-  const cleanBase = baseUrl.replace(/\/$/, "");
-  return keys.map((key) => `${cleanBase}/${key}`);
+  const cleanBase = baseUrl ? baseUrl.replace(/\/$/, "") : "";
+  return keys
+    .map((key) => {
+      if (!key) {
+        return null;
+      }
+      const trimmed = String(key).trim();
+      if (!trimmed) {
+        return null;
+      }
+      if (/^https?:\/\//i.test(trimmed)) {
+        return trimmed;
+      }
+      const cleanKey = trimmed.replace(/^\/+/, "");
+      if (!cleanBase) {
+        return cleanKey;
+      }
+      return `${cleanBase}/${cleanKey}`;
+    })
+    .filter(Boolean);
 }
 
 export async function onRequestGet({ request, env }) {

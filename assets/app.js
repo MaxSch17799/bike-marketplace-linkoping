@@ -340,19 +340,13 @@ function renderHome() {
             </div>`
           : `<div class="carousel"><img src="/assets/placeholder.svg" alt="No photo" /></div>`;
 
-        const meta = [
-          listing.type,
-          listing.condition,
-          listing.location,
-          listing.wheel_size_in ? `${listing.wheel_size_in} in` : null
-        ].filter(Boolean);
         const features = Array.isArray(listing.features) ? listing.features : [];
         const hasLock = features.includes("Lock included");
         const typeLabel = listing.type || "Bike";
         const conditionLabel = listing.condition || "unknown";
         const locationLabel = listing.location || "-";
         const summaryParts = [
-          `Type of bike <strong>${typeLabel}</strong> in <strong>${conditionLabel}</strong> condition, located in <strong>${locationLabel}</strong>.`
+          `A <strong>${typeLabel}</strong> bike in <strong>${conditionLabel}</strong> condition, located in <strong>${locationLabel}</strong>.`
         ];
         if (listing.wheel_size_in) {
           summaryParts.push(`Has <strong>${listing.wheel_size_in}</strong> inch wheels.`);
@@ -372,7 +366,6 @@ function renderHome() {
               <div class="card-title">${listing.brand || "Bike"}</div>
               <div class="card-price">${formatPrice(listing.price_sek)}</div>
             </div>
-            <div class="card-meta">${meta.map((item) => `<span>${item}</span>`).join("")}</div>
             <div class="helper">${summaryText}</div>
             <div class="helper">${deliveryText}</div>
             <div class="helper">Posted ${formatDate(listing.created_at)}</div>
@@ -1575,7 +1568,7 @@ async function loadAdminAnalytics() {
   }
 }
 
-function renderAbout() {
+function renderAboutLegacy() {
   setActiveNav("/about");
   app.innerHTML = `
     <section class="section">
@@ -1609,6 +1602,70 @@ function renderAbout() {
         <div class="card-title">About privacy</div>
         <div class="helper">
           We do not want sensitive personal information posted here. Buyer contact messages and IP hashes are removed after 30 days.
+          Please be careful about what you share. Reports are kept up to one year for safety review.
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+function renderAbout() {
+  setActiveNav("/about");
+  app.innerHTML = `
+    <section class="section">
+      <div class="section-title">About</div>
+      <div class="card">
+        <div class="card-title">About this marketplace</div>
+        <div class="helper">
+          A local bike marketplace for Linköping. Posting and buying are free, and we will do our best to keep it that way
+          even if hosting limits grow.
+        </div>
+        <div class="helper">
+          Listings go live instantly and moderation happens through reports sent to the admins. Bikes only for now.
+        </div>
+        <div class="helper">
+          Buyers browse listings and contact sellers directly. Sellers post without an account and receive a private seller
+          token. You can edit price with the token; for other changes, delete the listing and create a new one.
+        </div>
+        <div class="helper">
+          We Buy Your Bike is a separate option under the Sell tab. It gives students a quick quote and pickup at the end
+          of the semester. We repair and resell the bikes to new students.
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">About us</div>
+        <div class="helper">
+          We are a small group of students who like working on bikes and solving problems. After struggling to find good
+          bikes ourselves, we wanted to make it easier for others in Linköping.
+        </div>
+        <div class="helper">
+          We keep the service simple and semi-anonymous. We do not want to collect data on people and only keep what is
+          needed to run the marketplace safely.
+        </div>
+        <div class="helper">Contact: webuyyourbike.linkoping@gmail.com</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Q&A</div>
+        <div class="notice">
+          <div><strong>Do I need an account?</strong> No. You get a private seller token instead.</div>
+          <div><strong>Is it free?</strong> Yes. Posting and buying are free, and we plan to keep it free even if the site grows.</div>
+          <div><strong>What can I list?</strong> Bikes only, in Linköping.</div>
+          <div><strong>How long does a listing stay?</strong> 39 days by default, extended when you open your dashboard.</div>
+          <div><strong>Can I edit a listing?</strong> You can edit the price only. For other changes, delete the listing and create a new one.</div>
+          <div><strong>I lost my seller token.</strong> Open the listing, press report, choose "Other", and tell us you lost the token and want it removed.</div>
+          <div><strong>How do I remove a listing?</strong> Use your seller token in the dashboard to delete it.</div>
+          <div><strong>How do I report a listing?</strong> Open the listing and press the report button. Reports are reviewed by admins.</div>
+          <div><strong>Are duplicates allowed?</strong> Please avoid duplicate listings and keep one listing per bike.</div>
+          <div><strong>Any safety tips?</strong> Meet in public, bring a friend, and trust your gut if something feels off.</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">About privacy</div>
+        <div class="helper">
+          We aim to run the marketplace semi-anonymously and avoid collecting personal data. There are no accounts, and
+          sharing contact details is optional. Buyer contact messages and IP hashes are removed after 30 days.
+        </div>
+        <div class="helper">
           Please be careful about what you share. Reports are kept up to one year for safety review.
         </div>
       </div>
@@ -1739,7 +1796,15 @@ async function apiPostJson(path, payload) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
   });
-  return response.json();
+  const text = await response.text();
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    return {
+      ok: false,
+      error: response.ok ? "Unexpected response from the server." : `Server error (${response.status}).`
+    };
+  }
 }
 
 async function apiPostForm(path, formData) {

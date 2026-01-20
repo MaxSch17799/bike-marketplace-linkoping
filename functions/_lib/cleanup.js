@@ -21,15 +21,44 @@ function sumNumberArray(values) {
   return values.reduce((sum, value) => sum + (Number(value) || 0), 0);
 }
 
+function normalizeImageKey(value) {
+  if (!value) {
+    return null;
+  }
+  const trimmed = String(value).trim();
+  if (!trimmed) {
+    return null;
+  }
+  if (/^https?:\/\//i.test(trimmed)) {
+    try {
+      const url = new URL(trimmed);
+      const path = url.pathname.replace(/^\/+/, "");
+      return path || null;
+    } catch (error) {
+      return null;
+    }
+  }
+  return trimmed.replace(/^\/+/, "");
+}
+
+function normalizeImageKeys(keys) {
+  return (keys || []).map(normalizeImageKey).filter(Boolean);
+}
+
 async function deleteListingImages(env, imageKeys, imageSizes) {
-  if (!imageKeys.length) {
+  const keysToDelete = normalizeImageKeys(imageKeys);
+  if (!keysToDelete.length) {
     return;
   }
-  await env.PUBLIC_BUCKET.delete(imageKeys);
-  await recordClassA(env, imageKeys.length);
-  const totalBytes = sumNumberArray(imageSizes);
-  if (totalBytes > 0) {
-    await adjustStorageBytes(env, -totalBytes);
+  try {
+    await env.PUBLIC_BUCKET.delete(keysToDelete);
+    await recordClassA(env, keysToDelete.length);
+    const totalBytes = sumNumberArray(imageSizes);
+    if (totalBytes > 0) {
+      await adjustStorageBytes(env, -totalBytes);
+    }
+  } catch (error) {
+    // Ignore storage deletion errors so DB cleanup can continue.
   }
 }
 

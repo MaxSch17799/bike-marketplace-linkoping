@@ -18,6 +18,30 @@ function parseJsonArray(value) {
   }
 }
 
+function normalizeImageKey(value) {
+  if (!value) {
+    return null;
+  }
+  const trimmed = String(value).trim();
+  if (!trimmed) {
+    return null;
+  }
+  if (/^https?:\/\//i.test(trimmed)) {
+    try {
+      const url = new URL(trimmed);
+      const path = url.pathname.replace(/^\/+/, "");
+      return path || null;
+    } catch (error) {
+      return null;
+    }
+  }
+  return trimmed.replace(/^\/+/, "");
+}
+
+function normalizeImageKeys(keys) {
+  return (keys || []).map(normalizeImageKey).filter(Boolean);
+}
+
 export async function onRequestPost({ request, env }) {
   await recordApiRequest(env);
   await cleanup(env);
@@ -55,12 +79,17 @@ export async function onRequestPost({ request, env }) {
 
   const imageKeys = parseJsonArray(listing.image_keys_json);
   const imageSizes = parseJsonArray(listing.image_sizes_json);
-  if (imageKeys.length) {
-    await env.PUBLIC_BUCKET.delete(imageKeys);
-    await recordClassA(env, imageKeys.length);
-    const totalBytes = imageSizes.reduce((sum, value) => sum + (Number(value) || 0), 0);
-    if (totalBytes > 0) {
-      await adjustStorageBytes(env, -totalBytes);
+  const keysToDelete = normalizeImageKeys(imageKeys);
+  if (keysToDelete.length) {
+    try {
+      await env.PUBLIC_BUCKET.delete(keysToDelete);
+      await recordClassA(env, keysToDelete.length);
+      const totalBytes = imageSizes.reduce((sum, value) => sum + (Number(value) || 0), 0);
+      if (totalBytes > 0) {
+        await adjustStorageBytes(env, -totalBytes);
+      }
+    } catch (error) {
+      // Ignore storage deletion errors so DB cleanup can continue.
     }
   }
 
