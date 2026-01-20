@@ -52,7 +52,7 @@ export async function onRequestPost({ request, env }) {
   if (!listing || listing.status !== "active" || listing.expires_at < now) {
     return fail(404, "Listing not available.");
   }
-  if (listing.contact_mode !== "buyer_message") {
+  if (listing.contact_mode !== "buyer_message" && listing.contact_mode !== "public_contact") {
     return fail(400, "Listing does not accept buyer messages.");
   }
 

@@ -550,6 +550,16 @@ function renderListingDetail(route) {
   const paymentParts = [currencyLabel, paymentLabel].filter(Boolean);
   const paymentText = paymentParts.length ? paymentParts.join(" · ") : "";
   const publicContactMethods = formatContactMethods(listing.public_phone_methods || []);
+  const preferredParts = [];
+  if (publicContactMethods) {
+    preferredParts.push(publicContactMethods);
+  }
+  if (listing.public_email) {
+    preferredParts.push(`email ${listing.public_email}`);
+  }
+  const buyerMessageHint = preferredParts.length
+    ? `You can also contact this seller with your contact info. The seller prefers to be contacted via ${preferredParts.join(" and/or ")}.`
+    : "You can also contact this seller with your contact info.";
 
   app.innerHTML = `
     <section class="section">
@@ -613,7 +623,9 @@ function renderListingDetail(route) {
             <div>Phone: ${listing.public_phone || "-"}</div>
             ${publicContactMethods ? `<div class="helper">Preferred contact: ${publicContactMethods}</div>` : ""}
           </div>
-        ` : `
+          <div class="helper">${buyerMessageHint}</div>
+        ` : ""}
+        ${listing.contact_mode === "buyer_message" || listing.contact_mode === "public_contact" ? `
           <form class="form" id="contactForm">
             <label>
               Email (optional)
@@ -645,7 +657,7 @@ function renderListingDetail(route) {
             <div class="turnstile" data-turnstile></div>
             <button class="button" type="submit">Send message</button>
           </form>
-        `}
+        ` : "<div class='helper'>This seller does not accept buyer messages.</div>"}
       </div>
     </section>
 
