@@ -1861,7 +1861,7 @@ async function loadAdminOverview() {
     const features = Array.isArray(listing.features) ? listing.features : [];
     const faults = Array.isArray(listing.faults) ? listing.faults : [];
     const paymentMethods = Array.isArray(listing.payment_methods) ? listing.payment_methods : [];
-    const publicPhoneMethods = Array.isArray(listing.public_phone_methods)
+    const publicPhoneMethodList = Array.isArray(listing.public_phone_methods)
       ? listing.public_phone_methods
       : [];
     const images = Array.isArray(listing.image_urls) ? listing.image_urls : [];
@@ -1943,7 +1943,7 @@ async function loadAdminOverview() {
       .map(
         (option, index) => `
           <label class="tag">
-            <input type="checkbox" name="public_phone_method_${index}" value="${option.value}" ${publicPhoneMethods.includes(option.value) ? "checked" : ""} />
+            <input type="checkbox" name="public_phone_method_${index}" value="${option.value}" ${publicPhoneMethodList.includes(option.value) ? "checked" : ""} />
             ${option.label}
           </label>
         `
