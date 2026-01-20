@@ -43,19 +43,19 @@ body {
 }
 
 .brand {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: stretch;
-  column-gap: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
   min-width: 0;
 }
 
 .brand-logo {
-  height: 100%;
-  width: auto;
+  height: 2.2em;
+  width: 2.2em;
+  max-height: 56px;
   border-radius: 12px;
   object-fit: cover;
-  aspect-ratio: 1 / 1;
+  flex: 0 0 auto;
 }
 
 .brand-text {
