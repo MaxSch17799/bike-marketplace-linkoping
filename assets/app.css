@@ -50,9 +50,9 @@ body {
 }
 
 .brand-logo {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
+  width: clamp(40px, 8vw, 56px);
+  height: clamp(40px, 8vw, 56px);
+  border-radius: 12px;
   object-fit: cover;
 }
 
@@ -64,11 +64,9 @@ body {
 }
 
 .brand-title {
-  font-size: clamp(14px, 2.4vw, 16px);
+  font-size: clamp(16px, 3vw, 22px);
   font-weight: 600;
-  letter-spacing: 0.02em;
-  color: var(--muted);
-  text-transform: uppercase;
+  color: var(--ink);
 }
 
 .brand-sub {
@@ -438,6 +436,24 @@ textarea {
 
   .site-header {
     padding: 16px;
+  }
+}
+
+@media (max-width: 700px) {
+  .site-header {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    column-gap: 12px;
+  }
+
+  .nav {
+    display: grid;
+    grid-template-columns: repeat(2, max-content);
+    justify-content: end;
+    column-gap: 10px;
+    row-gap: 6px;
+    white-space: normal;
   }
 }
 
