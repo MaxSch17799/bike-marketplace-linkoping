@@ -47,7 +47,7 @@ export async function onRequestGet({ request, env }) {
   }
 
   const listingsResult = await env.DB.prepare(
-    "SELECT listing_id, seller_id, created_at, expires_at, rank, price_sek, brand, type, condition, wheel_size_in, features_json, faults_json, location, currency_mode, payment_methods_json, description, delivery_possible, delivery_price_sek, contact_mode, public_email, public_phone, public_phone_methods_json, image_keys_json, status, ip_hash FROM listings ORDER BY created_at DESC"
+    "SELECT listing_id, seller_id, created_at, expires_at, rank, price_sek, brand, type, condition, wheel_size_in, features_json, faults_json, location, currency_mode, payment_methods_json, description, delivery_possible, delivery_price_sek, contact_mode, public_email, public_phone, public_phone_methods_json, image_keys_json, status, ip_hash FROM listings ORDER BY rank DESC, created_at ASC"
   ).all();
 
   const baseUrl = env.PUBLIC_R2_BASE_URL || "";

@@ -195,6 +195,16 @@ function formatBytes(bytes) {
   return `${numberValue} B`;
 }
 
+function escapeHtml(value) {
+  const raw = value === null || value === undefined ? "" : String(value);
+  return raw
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function buildListingSummary({ type, condition, location, wheelSize, hasLock }) {
   const typeLabel = type || "Bike";
   const conditionLabel = condition || "unknown";
@@ -313,6 +323,8 @@ function formatContactError(message) {
       return "This listing is no longer available.";
     case "Listing does not accept buyer messages.":
       return "This listing does not accept buyer messages.";
+    case "Please wait before sending another message.":
+      return "Please wait 10 minutes before sending another message to this listing.";
     case "Turnstile verification failed.":
       return "Turnstile check failed. Please try again in a few seconds, then press Send message again.";
     case "Invalid contact method.":
@@ -616,7 +628,6 @@ function renderListingDetail(route) {
       </div>
       <div class="card">
         <div class="section-title">Contact</div>
-        <div id="contactNotice"></div>
         ${listing.contact_mode === "public_contact" ? `
           <div class="notice">
             <div>Email: ${listing.public_email || "-"}</div>
@@ -656,6 +667,7 @@ function renderListingDetail(route) {
             <div class="helper">Provide email or phone so the seller can reply.</div>
             <div class="turnstile" data-turnstile></div>
             <button class="button" type="submit">Send message</button>
+            <div id="contactNotice"></div>
           </form>
         ` : "<div class='helper'>This seller does not accept buyer messages.</div>"}
       </div>
@@ -1628,33 +1640,83 @@ async function loadAdminOverview() {
   const sellerContacts = listings.filter(
     (listing) => listing.public_email || listing.public_phone
   );
+  const sellerContactCards = sellerContacts
+    .map((listing) => {
+      const images = Array.isArray(listing.image_urls) ? listing.image_urls : [];
+      const imageTag = images.length
+        ? `<div class="carousel" data-images='${JSON.stringify(images)}'>
+            <img src="${images[0]}" alt="Bike photo" loading="lazy" />
+            ${images.length > 1 ? `
+              <div class="carousel-controls">
+                <button type="button" data-action="prev">&#8249;</button>
+                <button type="button" data-action="next">&#8250;</button>
+              </div>
+            ` : ""}
+          </div>`
+        : `<div class="carousel"><img src="/assets/placeholder.svg" alt="No photo" /></div>`;
+
+      const features = Array.isArray(listing.features) ? listing.features : [];
+      const hasLock = features.includes("Lock included");
+      const summaryText = buildListingSummary({
+        type: listing.type,
+        condition: listing.condition,
+        location: listing.location,
+        wheelSize: listing.wheel_size_in,
+        hasLock
+      });
+      const deliveryText = listing.delivery_possible
+        ? `Delivery possible for ${formatPrice(listing.delivery_price_sek)}`
+        : "Pickup only";
+      const contactMethods = formatContactMethods(listing.public_phone_methods || []);
+
+      return `
+        <article class="card">
+          ${imageTag}
+          <div class="card-header">
+            <div class="card-title">${listing.brand || "Bike"}</div>
+            <div class="card-price">${formatPrice(listing.price_sek)}</div>
+          </div>
+          <div class="helper">${summaryText}</div>
+          <div class="helper">${deliveryText}</div>
+          <div class="helper">Posted ${formatDate(listing.created_at)}</div>
+          <div class="notice">
+            <div>Email: ${listing.public_email || "-"}</div>
+            <div>Phone: ${listing.public_phone || "-"}</div>
+            ${contactMethods ? `<div class="helper">Preferred contact: ${contactMethods}</div>` : ""}
+          </div>
+          <div class="helper">Listing ID: ${listing.listing_id}</div>
+          <div class="inline-actions">
+            <button class="button secondary" data-action="view" data-id="${listing.listing_id}">View</button>
+          </div>
+        </article>
+      `;
+    })
+    .join("");
 
   content.innerHTML = `
     <div class="section">
       <div class="section-title">Listings</div>
-      <div class="card-grid">
+      <div class="helper">Drag and drop to reorder listings. Higher in the list means higher rank.</div>
+      <div class="card-grid admin-listings" id="adminListings">
         ${listings
           .map(
-            (listing) => `
-              <div class="card ${listing.status !== "active" ? "muted" : ""}">
+            (listing, index) => `
+              <div class="card admin-listing ${listing.status !== "active" ? "muted" : ""}" draggable="true" data-listing-card data-id="${listing.listing_id}">
                 <div class="card-header">
                   <div class="card-title">${listing.brand || "Bike"}</div>
                   <div class="card-price">${formatPrice(listing.price_sek)}</div>
                 </div>
                 <div class="card-meta">
                   <span>${listing.status}</span>
-                  <span>Rank: ${listing.rank}</span>
+                  <span>Position: ${index + 1}</span>
                   <span>Expires: ${formatDate(listing.expires_at)}</span>
                 </div>
-                <label>
-                  Rank
-                  <input type="number" data-rank="${listing.listing_id}" value="${listing.rank}" />
-                </label>
                 <div class="inline-actions">
-                  <button class="button secondary" data-action="rank" data-id="${listing.listing_id}">Set rank</button>
+                  <button class="button secondary" data-action="edit" data-id="${listing.listing_id}">Edit</button>
                   <button class="button danger" data-action="delete" data-id="${listing.listing_id}">Delete</button>
                 </div>
                 ${listing.ip_hash ? `<button class="button ghost" data-action="block" data-ip="${listing.ip_hash}">Block IP</button>` : ""}
+                <div class="drag-handle">Drag to reorder</div>
               </div>
             `
           )
@@ -1689,24 +1751,7 @@ async function loadAdminOverview() {
       <div class="section-title">Seller contacts</div>
       <div class="helper">Shown when sellers choose public contact info.</div>
       ${sellerContacts.length
-        ? sellerContacts
-            .map(
-              (listing) => `
-                <div class="card">
-                  <div class="card-header">
-                    <div class="card-title">${listing.brand || "Bike"}</div>
-                    <div class="helper">${listing.listing_id}</div>
-                  </div>
-                  <div>Email: ${listing.public_email || "-"}</div>
-                  <div>Phone: ${listing.public_phone || "-"}</div>
-                  ${listing.public_phone_methods && listing.public_phone_methods.length
-                    ? `<div class="helper">Preferred contact: ${formatContactMethods(listing.public_phone_methods)}</div>`
-                    : ""}
-                  <div class="helper">${listing.contact_mode}</div>
-                </div>
-              `
-            )
-            .join("")
+        ? `<div class="card-grid" id="adminSellerContacts">${sellerContactCards}</div>`
         : `<div class="empty">No seller contacts.</div>`}
     </div>
 
@@ -1742,23 +1787,512 @@ async function loadAdminOverview() {
         </div>
       </div>
     </div>
+
+    <div class="modal" id="adminEditModal"></div>
   `;
 
-  qsa("button[data-action='rank']", content).forEach((button) => {
-    button.addEventListener("click", async () => {
-      const listingId = button.dataset.id;
-      const rankInput = qs(`input[data-rank='${listingId}']`, content);
-      const rankValue = Number(rankInput.value);
-      const result = await apiPostJson("/api/admin/set-rank", { listing_id: listingId, rank: rankValue });
-      if (result.ok) {
-        if (result.no_change) {
-          alert("Rank unchanged.");
-        } else {
-          alert("Rank updated.");
-          await refreshListings();
-        }
+  const listingById = new Map(listings.map((listing) => [listing.listing_id, listing]));
+
+  const listingGrid = qs("#adminListings", content);
+  if (listingGrid) {
+    let dragging = null;
+    listingGrid.addEventListener("dragstart", (event) => {
+      const card = event.target.closest("[data-listing-card]");
+      if (!card) {
+        return;
+      }
+      dragging = card;
+      card.classList.add("dragging");
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", card.dataset.id || "");
+    });
+    listingGrid.addEventListener("dragover", (event) => {
+      if (!dragging) {
+        return;
+      }
+      const card = event.target.closest("[data-listing-card]");
+      if (!card || card === dragging) {
+        return;
+      }
+      event.preventDefault();
+      const rect = card.getBoundingClientRect();
+      const after = event.clientY > rect.top + rect.height / 2;
+      if (after) {
+        card.after(dragging);
       } else {
-        alert(result.error || "Could not update rank.");
+        card.before(dragging);
+      }
+    });
+    listingGrid.addEventListener("dragend", async () => {
+      if (!dragging) {
+        return;
+      }
+      dragging.classList.remove("dragging");
+      dragging = null;
+      const order = Array.from(listingGrid.querySelectorAll("[data-listing-card]")).map(
+        (item) => item.dataset.id
+      );
+      const result = await apiPostJson("/api/admin/reorder-listings", { listing_ids: order });
+      if (result.ok) {
+        await refreshListings();
+        loadAdminOverview();
+      } else {
+        alert(result.error || "Could not update order.");
+      }
+    });
+  }
+
+  const sellerGrid = qs("#adminSellerContacts", content);
+  if (sellerGrid) {
+    qsa("button[data-action='view']", sellerGrid).forEach((button) => {
+      button.addEventListener("click", () => {
+        navigate(`/listing/${button.dataset.id}`);
+      });
+    });
+    setupCarousels(sellerGrid);
+  }
+
+  const editModal = qs("#adminEditModal", content);
+  const openEditModal = (listing) => {
+    if (!editModal) {
+      return;
+    }
+
+    const features = Array.isArray(listing.features) ? listing.features : [];
+    const faults = Array.isArray(listing.faults) ? listing.faults : [];
+    const paymentMethods = Array.isArray(listing.payment_methods) ? listing.payment_methods : [];
+    const publicPhoneMethods = Array.isArray(listing.public_phone_methods)
+      ? listing.public_phone_methods
+      : [];
+    const images = Array.isArray(listing.image_urls) ? listing.image_urls : [];
+    const isPublicContact = listing.contact_mode === "public_contact";
+    const deliveryPossible = Boolean(listing.delivery_possible);
+    const currencyMode = listing.currency_mode || "sek_only";
+
+    const priceValue = listing.price_sek === null || listing.price_sek === undefined ? "" : listing.price_sek;
+    const brandValue = escapeHtml(listing.brand || "");
+    const wheelValue =
+      listing.wheel_size_in === null || listing.wheel_size_in === undefined ? "" : listing.wheel_size_in;
+    const locationValue = escapeHtml(listing.location || "");
+    const descriptionValue = escapeHtml(listing.description || "");
+    const publicEmailValue = escapeHtml(listing.public_email || "");
+    const publicPhoneValue = escapeHtml(listing.public_phone || "");
+    const deliveryPriceValue =
+      listing.delivery_price_sek === null || listing.delivery_price_sek === undefined
+        ? ""
+        : listing.delivery_price_sek;
+
+    const typeOptions = listingTypes
+      .map(
+        (item) =>
+          `<option value="${escapeHtml(item)}" ${item === listing.type ? "selected" : ""}>${escapeHtml(item)}</option>`
+      )
+      .join("");
+    const conditionOptionsHtml = conditionOptions
+      .map(
+        (item) =>
+          `<option value="${escapeHtml(item)}" ${item === listing.condition ? "selected" : ""}>${escapeHtml(item)}</option>`
+      )
+      .join("");
+
+    const currencyOptionsHtml = currencyModeOptions
+      .map(
+        (option) => `
+          <label class="tag">
+            <input type="radio" name="currency_mode" value="${option.value}" ${option.value === currencyMode ? "checked" : ""} />
+            ${option.label}
+          </label>
+        `
+      )
+      .join("");
+
+    const paymentOptionsHtml = paymentMethodOptions
+      .map(
+        (option, index) => `
+          <label class="tag">
+            <input type="checkbox" name="payment_method_${index}" value="${option.value}" ${paymentMethods.includes(option.value) ? "checked" : ""} />
+            ${option.label}
+          </label>
+        `
+      )
+      .join("");
+
+    const featureOptionsHtml = featureOptions
+      .map(
+        (item, index) => `
+          <label class="tag">
+            <input type="checkbox" name="feature_${index}" value="${escapeHtml(item)}" ${features.includes(item) ? "checked" : ""} />
+            ${escapeHtml(item)}
+          </label>
+        `
+      )
+      .join("");
+
+    const faultOptionsHtml = faultOptions
+      .map(
+        (item, index) => `
+          <label class="tag">
+            <input type="checkbox" name="fault_${index}" value="${escapeHtml(item)}" ${faults.includes(item) ? "checked" : ""} />
+            ${escapeHtml(item)}
+          </label>
+        `
+      )
+      .join("");
+
+    const contactOptionsHtml = contactMethodOptions
+      .map(
+        (option, index) => `
+          <label class="tag">
+            <input type="checkbox" name="public_phone_method_${index}" value="${option.value}" ${publicPhoneMethods.includes(option.value) ? "checked" : ""} />
+            ${option.label}
+          </label>
+        `
+      )
+      .join("");
+
+    const imagePreview = images.length
+      ? images.map((url) => `<img src="${escapeHtml(url)}" alt="Listing photo" />`).join("")
+      : `<div class="helper">No images uploaded.</div>`;
+
+    editModal.innerHTML = `
+      <div class="modal-card modal-wide">
+        <div class="section-title">Edit listing</div>
+        <div class="helper">Listing ID: ${listing.listing_id}</div>
+        <form class="form" id="adminEditForm">
+          <input type="hidden" name="listing_id" value="${escapeHtml(listing.listing_id)}" />
+          <div class="form-row">
+            <label>
+              Price (SEK)
+              <input type="number" name="price_sek" min="0" required value="${escapeHtml(priceValue)}" />
+            </label>
+            <label>
+              Brand
+              <input type="text" name="brand" maxlength="40" required value="${brandValue}" />
+            </label>
+            <label>
+              Type
+              <select name="type" required>
+                ${typeOptions}
+              </select>
+            </label>
+            <label>
+              Condition
+              <select name="condition" required>
+                ${conditionOptionsHtml}
+              </select>
+            </label>
+          </div>
+
+          <div>
+            <div class="helper">Accepted currency</div>
+            <div class="tag-list" id="adminCurrencyMode">
+              ${currencyOptionsHtml}
+            </div>
+          </div>
+
+          <div>
+            <div class="helper">Payment methods</div>
+            <div class="tag-list" id="adminPaymentMethods">
+              ${paymentOptionsHtml}
+            </div>
+            <div class="helper">Mention other payment method in description.</div>
+          </div>
+
+          <div class="form-row">
+            <label>
+              Wheel size (inches)
+              <input type="number" name="wheel_size_in" min="10" max="36" step="0.5" required value="${escapeHtml(wheelValue)}" />
+            </label>
+            <label>
+              Location (max 25 chars)
+              <input type="text" name="location" list="adminLocationList" maxlength="25" required value="${locationValue}" />
+              <datalist id="adminLocationList">
+                ${locationSuggestions.map((item) => `<option value="${escapeHtml(item)}"></option>`).join("")}
+              </datalist>
+            </label>
+          </div>
+
+          <div>
+            <div class="helper">Delivery in Linkoping</div>
+            <div class="tag-list" id="adminDeliveryOptions">
+              <label class="tag">
+                <input type="radio" name="delivery_possible" value="no" ${deliveryPossible ? "" : "checked"} /> No delivery
+              </label>
+              <label class="tag">
+                <input type="radio" name="delivery_possible" value="yes" ${deliveryPossible ? "checked" : ""} /> Delivery available
+              </label>
+            </div>
+            <div id="adminDeliveryPriceFields" style="display: ${deliveryPossible ? "block" : "none"};">
+              <label>
+                Delivery price (SEK)
+                <input type="number" name="delivery_price_sek" min="0" step="1" value="${escapeHtml(deliveryPriceValue)}" />
+              </label>
+            </div>
+          </div>
+
+          <label>
+            Description (optional, max 150 chars)
+            <textarea name="description" maxlength="150">${descriptionValue}</textarea>
+          </label>
+
+          <div>
+            <div class="helper">Features</div>
+            <div class="tag-list">
+              ${featureOptionsHtml}
+            </div>
+          </div>
+
+          <div>
+            <div class="helper">Faults</div>
+            <div class="tag-list">
+              ${faultOptionsHtml}
+            </div>
+          </div>
+
+          <div>
+            <div class="helper">Contact mode</div>
+            <div class="tag-list" id="adminContactMode">
+              <label class="tag">
+                <input type="radio" name="contact_mode" value="buyer_message" ${isPublicContact ? "" : "checked"} /> Buyer message
+              </label>
+              <label class="tag">
+                <input type="radio" name="contact_mode" value="public_contact" ${isPublicContact ? "checked" : ""} /> Public contact
+              </label>
+            </div>
+          </div>
+
+          <div id="adminPublicContactFields" style="display: ${isPublicContact ? "block" : "none"};">
+            <div class="form-row">
+              <label>
+                Public email (optional)
+                <input type="email" name="public_email" value="${publicEmailValue}" />
+              </label>
+              <label>
+                Public phone (optional)
+                <input type="tel" name="public_phone" value="${publicPhoneValue}" />
+              </label>
+            </div>
+            <div id="adminPublicPhoneMethods" style="display: ${isPublicContact && publicPhoneValue ? "block" : "none"};">
+              <div class="helper">Preferred contact</div>
+              <div class="tag-list">
+                ${contactOptionsHtml}
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div class="helper">Current images</div>
+            <div class="admin-image-grid">${imagePreview}</div>
+          </div>
+
+          <label>
+            Replace images (optional, max ${maxImageCount})
+            <input type="file" name="images" accept="image/png,image/jpeg,image/webp" multiple />
+          </label>
+          <div class="tag-list">
+            <label class="tag">
+              <input type="checkbox" name="clear_images" value="1" /> Remove existing images
+            </label>
+          </div>
+
+          <div class="notice">
+            <div class="helper">Seller tokens are hashed and cannot be viewed. Generate a new token to log in as the seller.</div>
+            <div class="inline-actions">
+              <button class="button secondary" type="button" id="adminResetToken">Generate new token</button>
+            </div>
+            <div id="adminTokenResult"></div>
+          </div>
+
+          <div class="inline-actions">
+            <button class="button" type="submit" id="adminEditSave">Save changes</button>
+            <button class="button secondary" type="button" id="adminEditCancel">Cancel</button>
+          </div>
+          <div id="adminEditNotice"></div>
+        </form>
+      </div>
+    `;
+
+    editModal.classList.add("active");
+
+    const editForm = qs("#adminEditForm", editModal);
+    const editNotice = qs("#adminEditNotice", editModal);
+    const cancelButton = qs("#adminEditCancel", editModal);
+    const saveButton = qs("#adminEditSave", editModal);
+    const tokenResult = qs("#adminTokenResult", editModal);
+    const resetTokenButton = qs("#adminResetToken", editModal);
+
+    const closeModal = () => {
+      editModal.classList.remove("active");
+    };
+
+    cancelButton.addEventListener("click", closeModal);
+    editModal.addEventListener("click", (event) => {
+      if (event.target === editModal) {
+        closeModal();
+      }
+    });
+
+    const contactMode = qs("#adminContactMode", editModal);
+    const publicFields = qs("#adminPublicContactFields", editModal);
+    const publicPhoneInput = qs("input[name='public_phone']", editForm);
+    const publicPhoneMethods = qs("#adminPublicPhoneMethods", editModal);
+
+    const togglePublicPhoneMethods = () => {
+      const mode = qs("input[name='contact_mode']:checked", editForm).value;
+      const hasPhone = publicPhoneInput && publicPhoneInput.value.trim().length > 0;
+      if (publicFields) {
+        publicFields.style.display = mode === "public_contact" ? "block" : "none";
+      }
+      if (publicPhoneMethods) {
+        publicPhoneMethods.style.display = mode === "public_contact" && hasPhone ? "block" : "none";
+        if (!hasPhone || mode !== "public_contact") {
+          qsa("input[type='checkbox']", publicPhoneMethods).forEach((input) => {
+            input.checked = false;
+          });
+        }
+      }
+    };
+
+    if (contactMode) {
+      contactMode.addEventListener("change", togglePublicPhoneMethods);
+    }
+    if (publicPhoneInput) {
+      publicPhoneInput.addEventListener("input", togglePublicPhoneMethods);
+    }
+    togglePublicPhoneMethods();
+
+    const deliveryOptions = qs("#adminDeliveryOptions", editModal);
+    const deliveryPriceFields = qs("#adminDeliveryPriceFields", editModal);
+    if (deliveryOptions && deliveryPriceFields) {
+      deliveryOptions.addEventListener("change", () => {
+        const choice = qs("input[name='delivery_possible']:checked", editForm).value;
+        if (choice === "yes") {
+          deliveryPriceFields.style.display = "block";
+        } else {
+          deliveryPriceFields.style.display = "none";
+          const priceInput = qs("input[name='delivery_price_sek']", deliveryPriceFields);
+          if (priceInput) {
+            priceInput.value = "";
+          }
+        }
+      });
+    }
+
+    if (resetTokenButton) {
+      resetTokenButton.addEventListener("click", async () => {
+        if (!confirm("Generate a new seller token? The old token will stop working.")) {
+          return;
+        }
+        setNotice(tokenResult, "Generating token...");
+        const result = await apiPostJson("/api/admin/reset-seller-token", { listing_id: listing.listing_id });
+        if (result.ok) {
+          const token = result.seller_token;
+          tokenResult.innerHTML = `
+            <div class="notice ok">
+              New token: <strong>${escapeHtml(token)}</strong>
+              <div class="inline-actions">
+                <button class="button secondary" type="button" id="adminCopyToken">Copy token</button>
+              </div>
+            </div>
+          `;
+          const copyButton = qs("#adminCopyToken", tokenResult);
+          if (copyButton) {
+            copyButton.addEventListener("click", async () => {
+              if (!navigator.clipboard || !navigator.clipboard.writeText) {
+                setNotice(editNotice, "Clipboard access is not available.", "error");
+                return;
+              }
+              try {
+                await navigator.clipboard.writeText(token);
+                setNotice(editNotice, "Token copied.", "ok");
+              } catch (error) {
+                setNotice(editNotice, "Could not copy token.", "error");
+              }
+            });
+          }
+        } else {
+          setNotice(tokenResult, result.error || "Could not reset token.", "error");
+        }
+      });
+    }
+
+    const setSaving = (isSaving) => {
+      saveButton.classList.toggle("loading", isSaving);
+      saveButton.disabled = isSaving;
+      saveButton.textContent = isSaving ? "Saving..." : "Save changes";
+    };
+
+    editForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      setNotice(editNotice, "");
+      setSaving(true);
+
+      const formData = new FormData(editForm);
+      const publicEmail = String(formData.get("public_email") || "").trim().replace(/\s+/g, "");
+      const publicPhone = String(formData.get("public_phone") || "").trim();
+      if (publicEmail) {
+        formData.set("public_email", publicEmail);
+      }
+      if (publicPhone) {
+        formData.set("public_phone", publicPhone);
+      }
+
+      const selectedFeatures = [];
+      const selectedFaults = [];
+      const selectedPaymentMethods = [];
+      const selectedPublicPhoneMethods = [];
+
+      featureOptions.forEach((item, index) => {
+        if (editForm[`feature_${index}`] && editForm[`feature_${index}`].checked) {
+          selectedFeatures.push(item);
+        }
+      });
+      faultOptions.forEach((item, index) => {
+        if (editForm[`fault_${index}`] && editForm[`fault_${index}`].checked) {
+          selectedFaults.push(item);
+        }
+      });
+      paymentMethodOptions.forEach((item, index) => {
+        if (editForm[`payment_method_${index}`] && editForm[`payment_method_${index}`].checked) {
+          selectedPaymentMethods.push(item.value);
+        }
+      });
+      contactMethodOptions.forEach((item, index) => {
+        if (editForm[`public_phone_method_${index}`] && editForm[`public_phone_method_${index}`].checked) {
+          selectedPublicPhoneMethods.push(item.value);
+        }
+      });
+
+      formData.set("features_json", JSON.stringify(selectedFeatures));
+      formData.set("faults_json", JSON.stringify(selectedFaults));
+      formData.set("payment_methods_json", JSON.stringify(selectedPaymentMethods));
+      formData.set("public_phone_methods_json", JSON.stringify(selectedPublicPhoneMethods));
+
+      const files = Array.from(editForm.images.files || []).slice(0, maxImageCount);
+      formData.delete("images");
+      for (const file of files) {
+        const processed = await compressImage(file);
+        formData.append("images", processed, processed.name);
+      }
+
+      const response = await apiPostForm("/api/admin/update-listing", formData);
+      if (response.ok) {
+        setNotice(editNotice, "Listing updated.", "ok");
+        await refreshListings();
+        loadAdminOverview();
+        closeModal();
+      } else {
+        setNotice(editNotice, formatListingError(response.error, maxImageCount), "error");
+      }
+      setSaving(false);
+    });
+  };
+
+  qsa("button[data-action='edit']", content).forEach((button) => {
+    button.addEventListener("click", () => {
+      const listing = listingById.get(button.dataset.id);
+      if (listing) {
+        openEditModal(listing);
       }
     });
   });
@@ -1981,11 +2515,11 @@ function renderAbout() {
       <div class="card">
         <div class="card-title">About this marketplace</div>
         <div class="helper">
-          A local bike marketplace for Linköping. Posting and buying are free, and we will do our best to keep it that way
-          even if hosting limits grow.
+          This is a local bike marketplace for Linköping. Posting and buying are free, and we will do our best to keep it
+          that way even if hosting limits grow.
         </div>
         <div class="helper">
-          Listings go live instantly and moderation happens through reports sent to the admins. Bikes only for now.
+          Listings go live instantly. Moderation happens through reports sent to the admins. Bikes only for now.
         </div>
         <div class="helper">
           Buyers browse listings and contact sellers directly. Sellers post without an account and receive a private seller
@@ -1993,14 +2527,14 @@ function renderAbout() {
         </div>
         <div class="helper">
           We Buy Your Bike is a separate option under the Sell tab. It gives students a quick quote and pickup at the end
-          of the semester. We repair and resell the bikes to new students.
+          of the semester, then we repair and resell the bikes to new students.
         </div>
       </div>
       <div class="card">
         <div class="card-title">About us</div>
         <div class="helper">
-          We are a small group of students who like working on bikes and solving problems. After struggling to find good
-          bikes ourselves, we wanted to make it easier for others in Linköping.
+          We are a small group of students who moved to Linköping for our studies and like working on bikes and solving
+          problems. After struggling to find good bikes ourselves, we wanted to make it easier for others here.
         </div>
         <div class="helper">
           We keep the service simple and semi-anonymous. We do not want to collect data on people and only keep what is

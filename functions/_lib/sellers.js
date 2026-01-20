@@ -34,3 +34,23 @@ export async function createSeller(env) {
     .run();
   return { seller_id: sellerId, seller_token: sellerToken };
 }
+
+export async function resetSellerToken(env, sellerId) {
+  if (!sellerId) {
+    return null;
+  }
+  const sellerToken = generateToken();
+  const tokenHash = await hashToken(sellerToken, env.TOKEN_HASH_SALT);
+  if (!tokenHash) {
+    throw new Error("Missing TOKEN_HASH_SALT.");
+  }
+  const result = await env.DB.prepare(
+    "UPDATE sellers SET seller_token_hash = ? WHERE seller_id = ?"
+  )
+    .bind(tokenHash, sellerId)
+    .run();
+  if (!result.changes) {
+    return null;
+  }
+  return { seller_id: sellerId, seller_token: sellerToken };
+}

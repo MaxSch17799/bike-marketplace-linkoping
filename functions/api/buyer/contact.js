@@ -56,6 +56,18 @@ export async function onRequestPost({ request, env }) {
     return fail(400, "Listing does not accept buyer messages.");
   }
 
+  if (ipHash) {
+    const cutoff = now - 600;
+    const recent = await env.DB.prepare(
+      "SELECT contact_id FROM buyer_contacts WHERE listing_id = ? AND ip_hash = ? AND created_at >= ?"
+    )
+      .bind(listingId, ipHash, cutoff)
+      .first();
+    if (recent) {
+      return fail(429, "Please wait before sending another message.");
+    }
+  }
+
   const contactId = crypto.randomUUID();
   const expiresAt = now + TTL.contactDays * 86400;
 
