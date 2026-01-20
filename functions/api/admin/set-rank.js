@@ -28,13 +28,21 @@ export async function onRequestPost({ request, env }) {
     return fail(400, "Invalid rank.");
   }
 
-  const result = await env.DB.prepare("UPDATE listings SET rank = ? WHERE listing_id = ?")
-    .bind(rankValue, payload.listing_id)
-    .run();
+  const listing = await env.DB.prepare("SELECT rank FROM listings WHERE listing_id = ?")
+    .bind(payload.listing_id)
+    .first();
 
-  if (!result.changes) {
+  if (!listing) {
     return fail(404, "Listing not found.");
   }
+
+  if (Number(listing.rank) === rankValue) {
+    return ok({ no_change: true });
+  }
+
+  await env.DB.prepare("UPDATE listings SET rank = ? WHERE listing_id = ?")
+    .bind(rankValue, payload.listing_id)
+    .run();
 
   await buildPublicSnapshot(env);
 

@@ -54,7 +54,8 @@ body {
   width: 4.4em;
   max-height: 112px;
   border-radius: 12px;
-  object-fit: cover;
+  object-fit: contain;
+  background: transparent;
   flex: 0 0 auto;
 }
 
@@ -214,6 +215,25 @@ body {
   cursor: pointer;
 }
 
+.button.loading {
+  position: relative;
+  padding-right: 36px;
+}
+
+.button.loading::after {
+  content: "";
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  margin-top: -7px;
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+
 .button.secondary {
   background: var(--accent-soft);
   color: var(--ink);
@@ -232,6 +252,12 @@ body {
 .button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .form {
@@ -296,12 +322,13 @@ textarea {
   border-radius: 12px;
   overflow: hidden;
   border: 1px solid var(--line);
+  aspect-ratio: 4 / 3;
 }
 
 .carousel img {
   width: 100%;
   display: block;
-  height: 180px;
+  height: 100%;
   object-fit: cover;
 }
 
@@ -442,6 +469,18 @@ textarea {
 
   .site-header {
     padding: 16px;
+  }
+}
+
+@media (min-width: 900px) {
+  .card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1200px) {
+  .card-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 

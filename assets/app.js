@@ -178,11 +178,12 @@ function setNotice(target, message, type = "") {
   target.innerHTML = message ? `<div class="notice ${type}">${message}</div>` : "";
 }
 
-async function loadListings() {
-  if (state.listingsLoaded) {
+async function loadListings(force = false) {
+  if (state.listingsLoaded && !force) {
     return;
   }
   try {
+    state.listingsError = null;
     const response = await fetch(listingsUrl, { cache: "no-store" });
     if (!response.ok) {
       throw new Error("Failed to load listings");
@@ -196,6 +197,11 @@ async function loadListings() {
     state.listingsLoaded = true;
     state.listingsError = error.message || "Could not load listings.";
   }
+}
+
+async function refreshListings() {
+  state.listingsLoaded = false;
+  await loadListings(true);
 }
 
 function setActiveNav(path) {
@@ -340,6 +346,21 @@ function renderHome() {
           listing.location,
           listing.wheel_size_in ? `${listing.wheel_size_in} in` : null
         ].filter(Boolean);
+        const features = Array.isArray(listing.features) ? listing.features : [];
+        const hasLock = features.includes("Lock included");
+        const typeLabel = listing.type || "Bike";
+        const conditionLabel = listing.condition || "unknown";
+        const locationLabel = listing.location || "-";
+        const summaryParts = [
+          `Type of bike <strong>${typeLabel}</strong> in <strong>${conditionLabel}</strong> condition, located in <strong>${locationLabel}</strong>.`
+        ];
+        if (listing.wheel_size_in) {
+          summaryParts.push(`Has <strong>${listing.wheel_size_in}</strong> inch wheels.`);
+        }
+        if (hasLock) {
+          summaryParts.push("Includes a lock.");
+        }
+        const summaryText = summaryParts.join(" ");
         const deliveryText = listing.delivery_possible
           ? `Delivery possible for ${formatPrice(listing.delivery_price_sek)}`
           : "Pickup only";
@@ -352,6 +373,7 @@ function renderHome() {
               <div class="card-price">${formatPrice(listing.price_sek)}</div>
             </div>
             <div class="card-meta">${meta.map((item) => `<span>${item}</span>`).join("")}</div>
+            <div class="helper">${summaryText}</div>
             <div class="helper">${deliveryText}</div>
             <div class="helper">Posted ${formatDate(listing.created_at)}</div>
             <div class="inline-actions">
@@ -483,6 +505,7 @@ function renderListingDetail(route) {
             Reason
             <select name="reason" required>
               <option value="Scam">Scam</option>
+              <option value="Stolen">Stolen bike</option>
               <option value="Duplicate">Duplicate</option>
               <option value="Offensive">Offensive</option>
               <option value="Sold">Sold already</option>
@@ -493,6 +516,7 @@ function renderListingDetail(route) {
             Details (optional)
             <textarea name="details" maxlength="300"></textarea>
           </label>
+          <div class="helper">Leave your contact info in the details if you want us to reach out.</div>
           <div class="turnstile" data-turnstile></div>
           <div class="inline-actions">
             <button class="button" type="submit">Send report</button>
@@ -736,6 +760,9 @@ function renderSell() {
               Photos (up to ${maxImageCount})
               <input type="file" name="images" accept="image/*" multiple />
             </label>
+            <div class="inline-actions">
+              <button class="button ghost" id="clearPhotos" type="button">Clear photos</button>
+            </div>
 
             <div class="form-row">
               <label>
@@ -743,6 +770,7 @@ function renderSell() {
                 <input type="text" id="sellerTokenInput" placeholder="Paste your token" value="${savedToken}" />
               </label>
               <div class="inline-actions">
+                <button class="button ghost" id="copyToken" type="button">Copy token</button>
                 <button class="button ghost" id="clearToken" type="button">Clear token</button>
               </div>
             </div>
@@ -758,7 +786,8 @@ function renderSell() {
 
             <div class="turnstile" data-turnstile></div>
 
-            <button class="button" type="submit">Create listing</button>
+            <div class="helper" id="submitCooldownHelp"></div>
+            <button class="button" type="submit" id="createListingButton">Create listing</button>
         </form>
       </div>
     </section>
@@ -779,11 +808,46 @@ function renderSell() {
     }
   });
 
+  const notice = qs("#sellNotice");
+  const sellForm = qs("#sellForm");
   const tokenInput = qs("#sellerTokenInput");
+  const copyTokenButton = qs("#copyToken");
+  const createButton = qs("#createListingButton");
+  const cooldownHelp = qs("#submitCooldownHelp");
+  const clearPhotosButton = qs("#clearPhotos");
+
+  let lastSubmissionSnapshot = null;
+  let lastSubmissionHadImages = false;
+  let cooldownUntil = 0;
+  let cooldownTimer = null;
+  const createButtonLabel = createButton.textContent;
 
   qs("#clearToken").addEventListener("click", () => {
     localStorage.removeItem("seller_token");
     tokenInput.value = "";
+    toggleCopyButton();
+  });
+
+  const toggleCopyButton = () => {
+    copyTokenButton.disabled = !tokenInput.value.trim();
+  };
+  toggleCopyButton();
+  tokenInput.addEventListener("input", toggleCopyButton);
+  copyTokenButton.addEventListener("click", async () => {
+    const tokenValue = tokenInput.value.trim();
+    if (!tokenValue) {
+      return;
+    }
+    if (!navigator.clipboard || !navigator.clipboard.writeText) {
+      setNotice(notice, "Clipboard access is not available.", "error");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(tokenValue);
+      setNotice(notice, "Token copied.", "ok");
+    } catch (error) {
+      setNotice(notice, "Could not copy token.", "error");
+    }
   });
 
   const contactMode = qs("#contactMode");
@@ -808,11 +872,100 @@ function renderSell() {
     }
   });
 
-  const sellForm = qs("#sellForm");
+  clearPhotosButton.addEventListener("click", () => {
+    sellForm.images.value = "";
+    updateCreateButtonState();
+  });
+
+  const snapshotListingForm = () => {
+    const data = new FormData(sellForm);
+    const entries = [];
+    for (const [key, value] of data.entries()) {
+      if (key === "images") {
+        continue;
+      }
+      entries.push([key, String(value)]);
+    }
+    entries.sort((a, b) => a[0].localeCompare(b[0]) || a[1].localeCompare(b[1]));
+    return JSON.stringify(entries);
+  };
+
+  const canSubmitAgain = () => {
+    if (!lastSubmissionSnapshot) {
+      return true;
+    }
+    if (Date.now() < cooldownUntil) {
+      return false;
+    }
+    if (lastSubmissionHadImages) {
+      return sellForm.images.files.length === 0;
+    }
+    return snapshotListingForm() !== lastSubmissionSnapshot;
+  };
+
+  const updateCooldownHelp = () => {
+    if (!lastSubmissionSnapshot) {
+      cooldownHelp.textContent = "";
+      return;
+    }
+    const now = Date.now();
+    if (now < cooldownUntil) {
+      const seconds = Math.ceil((cooldownUntil - now) / 1000);
+      cooldownHelp.textContent = `Please wait ${seconds}s before creating another listing.`;
+      return;
+    }
+    if (lastSubmissionHadImages && sellForm.images.files.length > 0) {
+      cooldownHelp.textContent = "Remove uploaded photos to create another listing.";
+      return;
+    }
+    if (!lastSubmissionHadImages && snapshotListingForm() === lastSubmissionSnapshot) {
+      cooldownHelp.textContent = "Change at least one detail to create another listing.";
+      return;
+    }
+    cooldownHelp.textContent = "";
+  };
+
+  const updateCreateButtonState = () => {
+    if (createButton.dataset.loading === "true") {
+      updateCooldownHelp();
+      return;
+    }
+    createButton.disabled = !canSubmitAgain();
+    updateCooldownHelp();
+  };
+
+  const setCreateButtonLoading = (isLoading) => {
+    createButton.dataset.loading = isLoading ? "true" : "false";
+    createButton.classList.toggle("loading", isLoading);
+    createButton.textContent = isLoading ? "Creating..." : createButtonLabel;
+    createButton.disabled = isLoading || !canSubmitAgain();
+  };
+
+  const startCooldownTimer = () => {
+    if (cooldownTimer) {
+      clearInterval(cooldownTimer);
+    }
+    cooldownTimer = setInterval(() => {
+      updateCreateButtonState();
+      if (Date.now() >= cooldownUntil) {
+        clearInterval(cooldownTimer);
+        cooldownTimer = null;
+      }
+    }, 1000);
+  };
+
+  sellForm.addEventListener("input", updateCreateButtonState);
+  sellForm.addEventListener("change", updateCreateButtonState);
+  updateCreateButtonState();
+
   sellForm.addEventListener("submit", async (event) => {
     event.preventDefault();
-    const notice = qs("#sellNotice");
     setNotice(notice, "");
+    if (!canSubmitAgain()) {
+      updateCreateButtonState();
+      return;
+    }
+    setCreateButtonLoading(true);
 
     const formData = new FormData(sellForm);
     const tokenValue = tokenInput.value.trim();
@@ -837,6 +990,8 @@ function renderSell() {
     formData.set("faults_json", JSON.stringify(selectedFaults));
 
     const files = Array.from(sellForm.images.files || []).slice(0, maxImageCount);
+    const submissionSnapshot = snapshotListingForm();
+    const submissionHadImages = files.length > 0;
     formData.delete("images");
 
     for (const file of files) {
@@ -857,15 +1012,20 @@ function renderSell() {
     if (response.ok) {
       if (response.seller_token) {
         localStorage.setItem("seller_token", response.seller_token);
+        tokenInput.value = response.seller_token;
+        toggleCopyButton();
       }
       setNotice(notice, "Listing created. Keep your seller token safe.", "ok");
-      sellForm.reset();
-      if (response.seller_token) {
-        tokenInput.value = response.seller_token;
-      }
+      lastSubmissionSnapshot = submissionSnapshot;
+      lastSubmissionHadImages = submissionHadImages;
+      cooldownUntil = Date.now() + 20000;
+      startCooldownTimer();
     } else {
       setNotice(notice, response.error || "Could not create listing.", "error");
     }
+    resetTurnstile(sellForm);
+    setCreateButtonLoading(false);
+    updateCreateButtonState();
   });
 }
 
@@ -914,6 +1074,7 @@ function renderDashboard() {
           </label>
           <div class="inline-actions">
             <button class="button" id="dashboardLoad">Open dashboard</button>
+            <button class="button ghost" id="dashboardPaste">Paste token</button>
             <button class="button ghost" id="dashboardClear">Clear token</button>
           </div>
         </div>
@@ -936,6 +1097,19 @@ function renderDashboard() {
   qs("#dashboardClear").addEventListener("click", () => {
     localStorage.removeItem("seller_token");
     qs("#dashboardToken").value = "";
+  });
+
+  qs("#dashboardPaste").addEventListener("click", async () => {
+    if (!navigator.clipboard || !navigator.clipboard.readText) {
+      alert("Clipboard access is not available.");
+      return;
+    }
+    try {
+      const text = await navigator.clipboard.readText();
+      qs("#dashboardToken").value = text.trim();
+    } catch (error) {
+      alert("Could not paste token.");
+    }
   });
 
   if (savedToken) {
@@ -982,6 +1156,7 @@ async function loadDashboard(token) {
       ${listings
         .map((listing) => {
           const listingContacts = contactMap.get(listing.listing_id) || [];
+          const isActive = listing.status === "active";
           return `
             <div class="card ${listing.status !== "active" ? "muted" : ""}">
               <div class="card-header">
@@ -994,12 +1169,13 @@ async function loadDashboard(token) {
               </div>
               <label>
                 New price (SEK)
-                <input type="number" data-price="${listing.listing_id}" value="${listing.price_sek}" />
+                <input type="number" data-price="${listing.listing_id}" value="${listing.price_sek}" ${isActive ? "" : "disabled"} />
               </label>
               <div class="inline-actions">
-                <button class="button secondary" data-action="update" data-id="${listing.listing_id}">Update price</button>
+                <button class="button secondary" data-action="update" data-id="${listing.listing_id}" ${isActive ? "" : "disabled"}>Update price</button>
                 <button class="button danger" data-action="delete" data-id="${listing.listing_id}">Delete</button>
               </div>
+              ${!isActive ? "<div class='helper'>Price updates are only available for active listings.</div>" : ""}
               <div>
                 <div class="helper">Buyer contacts</div>
                 ${listingContacts.length
@@ -1034,7 +1210,12 @@ async function loadDashboard(token) {
         new_price: newPrice
       });
       if (result.ok) {
-        alert("Price updated.");
+        if (result.no_change) {
+          alert("Price unchanged.");
+        } else {
+          alert("Price updated.");
+          await refreshListings();
+        }
       } else {
         alert(result.error || "Could not update price.");
       }
@@ -1051,6 +1232,7 @@ async function loadDashboard(token) {
         listing_id: button.dataset.id
       });
       if (result.ok) {
+        await refreshListings();
         loadDashboard(token);
       } else {
         alert(result.error || "Could not delete listing.");
@@ -1212,7 +1394,12 @@ async function loadAdminOverview() {
       const rankValue = Number(rankInput.value);
       const result = await apiPostJson("/api/admin/set-rank", { listing_id: listingId, rank: rankValue });
       if (result.ok) {
-        alert("Rank updated.");
+        if (result.no_change) {
+          alert("Rank unchanged.");
+        } else {
+          alert("Rank updated.");
+          await refreshListings();
+        }
       } else {
         alert(result.error || "Could not update rank.");
       }
@@ -1226,6 +1413,7 @@ async function loadAdminOverview() {
       }
       const result = await apiPostJson("/api/admin/delete-listing", { listing_id: button.dataset.id });
       if (result.ok) {
+        await refreshListings();
         loadAdminOverview();
       } else {
         alert(result.error || "Could not delete listing.");
@@ -1279,6 +1467,9 @@ async function loadAdminOverview() {
       const reportId = button.dataset.id;
       const result = await apiPostJson("/api/admin/report-status", { report_id: reportId, status: "done" });
       if (result.ok) {
+        if (result.no_change) {
+          alert("Report already marked as done.");
+        }
         loadAdminOverview();
       } else {
         alert(result.error || "Could not mark done.");
@@ -1530,6 +1721,16 @@ function getTurnstileResponse(form) {
     return null;
   }
   return window.turnstile.getResponse(container.dataset.widgetId);
+}
+
+function resetTurnstile(form) {
+  if (!window.turnstile) {
+    return;
+  }
+  const container = form.querySelector(".turnstile");
+  if (container && container.dataset.widgetId) {
+    window.turnstile.reset(container.dataset.widgetId);
+  }
 }
 
 async function apiPostJson(path, payload) {

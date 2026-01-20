@@ -38,15 +38,23 @@ export async function onRequestPost({ request, env }) {
   }
 
   const now = Math.floor(Date.now() / 1000);
-  const result = await env.DB.prepare(
-    "UPDATE listings SET price_sek = ? WHERE listing_id = ? AND seller_id = ? AND status = 'active' AND expires_at >= ?"
+  const listing = await env.DB.prepare(
+    "SELECT listing_id, price_sek FROM listings WHERE listing_id = ? AND seller_id = ? AND status = 'active' AND expires_at >= ?"
   )
-    .bind(validation.value.new_price, payload.listing_id, seller.seller_id, now)
-    .run();
+    .bind(payload.listing_id, seller.seller_id, now)
+    .first();
 
-  if (!result.changes) {
+  if (!listing) {
     return fail(404, "Listing not found.");
   }
+
+  if (Number(listing.price_sek) === validation.value.new_price) {
+    return ok({ no_change: true });
+  }
+
+  await env.DB.prepare("UPDATE listings SET price_sek = ? WHERE listing_id = ? AND seller_id = ?")
+    .bind(validation.value.new_price, listing.listing_id, seller.seller_id)
+    .run();
 
   await buildPublicSnapshot(env);
 

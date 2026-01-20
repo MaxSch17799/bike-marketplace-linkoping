@@ -24,6 +24,18 @@ export async function onRequestPost({ request, env }) {
     return fail(400, "Invalid status.");
   }
 
+  const report = await env.DB.prepare("SELECT status FROM reports WHERE report_id = ?")
+    .bind(payload.report_id)
+    .first();
+
+  if (!report) {
+    return fail(404, "Report not found.");
+  }
+
+  if (report.status === payload.status) {
+    return ok({ no_change: true });
+  }
+
   const now = Math.floor(Date.now() / 1000);
   let query = "UPDATE reports SET status = ? WHERE report_id = ?";
   let params = [payload.status, payload.report_id];
@@ -37,10 +49,7 @@ export async function onRequestPost({ request, env }) {
     params = [payload.status, now, payload.report_id];
   }
 
-  const result = await env.DB.prepare(query).bind(...params).run();
-  if (!result.changes) {
-    return fail(404, "Report not found.");
-  }
+  await env.DB.prepare(query).bind(...params).run();
 
   return ok();
 }
