@@ -47,6 +47,8 @@ body {
   align-items: center;
   gap: 12px;
   min-width: 0;
+  text-decoration: none;
+  color: inherit;
 }
 
 .brand-logo {
@@ -315,6 +317,14 @@ textarea {
 .notice.error {
   background: rgba(185, 28, 28, 0.12);
   color: var(--danger);
+}
+
+.notice.contact-message {
+  border: 1px solid var(--line);
+}
+
+.notice.contact-message + .notice.contact-message {
+  margin-top: 10px;
 }
 
 .carousel {

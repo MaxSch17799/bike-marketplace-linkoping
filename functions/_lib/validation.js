@@ -25,11 +25,27 @@ function trimText(value) {
   return String(value).trim();
 }
 
-function isValidEmail(value) {
+function normalizeEmail(value) {
   if (!value) {
+    return "";
+  }
+  return String(value).trim().replace(/\s+/g, "");
+}
+
+function isValidEmail(value) {
+  const cleaned = normalizeEmail(value);
+  if (!cleaned) {
     return false;
   }
-  return /^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(value);
+  const atIndex = cleaned.indexOf("@");
+  if (atIndex <= 0 || atIndex !== cleaned.lastIndexOf("@")) {
+    return false;
+  }
+  const dotIndex = cleaned.lastIndexOf(".");
+  if (dotIndex <= atIndex + 1 || dotIndex >= cleaned.length - 1) {
+    return false;
+  }
+  return true;
 }
 
 function isValidPhone(value) {
@@ -121,7 +137,7 @@ export function validateListingFields(fields) {
     return { ok: false, error: "Invalid contact method." };
   }
 
-  const publicEmail = trimText(fields.public_email);
+  const publicEmail = normalizeEmail(fields.public_email);
   const publicPhone = trimText(fields.public_phone);
   if (fields.contact_mode === "public_contact") {
     if (!publicEmail && !publicPhone) {
@@ -173,7 +189,7 @@ export function validateListingFields(fields) {
 }
 
 export function validateBuyerContact(fields) {
-  const buyerEmail = trimText(fields.buyer_email);
+  const buyerEmail = normalizeEmail(fields.buyer_email);
   const buyerPhone = trimText(fields.buyer_phone);
   const message = trimText(fields.message);
   const buyerPhoneMethods = (fields.buyer_phone_methods || []).filter((item) =>

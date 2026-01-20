@@ -250,7 +250,7 @@ function formatListingError(message, maxImagesAllowed) {
   }
   switch (message) {
     case "Turnstile verification failed.":
-      return "Turnstile check failed. Please try again in a few seconds.";
+      return "Turnstile check failed. Please try again in a few seconds, then press Create listing again.";
     case "Invalid price.":
       return "Price is required and must be a number in SEK.";
     case "Invalid brand.":
@@ -314,7 +314,7 @@ function formatContactError(message) {
     case "Listing does not accept buyer messages.":
       return "This listing does not accept buyer messages.";
     case "Turnstile verification failed.":
-      return "Turnstile check failed. Please try again in a few seconds.";
+      return "Turnstile check failed. Please try again in a few seconds, then press Send message again.";
     case "Invalid contact method.":
       return "Please select valid phone contact methods.";
     default:
@@ -727,7 +727,7 @@ function renderListingDetail(route) {
       const notice = qs("#contactNotice");
       setNotice(notice, "");
       const formData = new FormData(contactForm);
-      const email = String(formData.get("buyer_email") || "").trim();
+      const email = String(formData.get("buyer_email") || "").trim().replace(/\s+/g, "");
       const phone = String(formData.get("buyer_phone") || "").trim();
       if (email) {
         formData.set("buyer_email", email);
@@ -1066,21 +1066,30 @@ function renderSell() {
   };
   toggleCopyButton();
   tokenInput.addEventListener("input", toggleCopyButton);
-  copyTokenButton.addEventListener("click", async () => {
+  const copyTokenToClipboard = async (targetNotice) => {
     const tokenValue = tokenInput.value.trim();
     if (!tokenValue) {
       return;
     }
     if (!navigator.clipboard || !navigator.clipboard.writeText) {
-      setNotice(notice, "Clipboard access is not available.", "error");
+      if (targetNotice) {
+        setNotice(targetNotice, "Clipboard access is not available.", "error");
+      }
       return;
     }
     try {
       await navigator.clipboard.writeText(tokenValue);
-      setNotice(notice, "Token copied.", "ok");
+      if (targetNotice) {
+        setNotice(targetNotice, "Token copied.", "ok");
+      }
     } catch (error) {
-      setNotice(notice, "Could not copy token.", "error");
+      if (targetNotice) {
+        setNotice(targetNotice, "Could not copy token.", "error");
+      }
     }
+  };
+  copyTokenButton.addEventListener("click", () => {
+    copyTokenToClipboard(notice);
   });
 
   const contactMode = qs("#contactMode");
@@ -1224,7 +1233,7 @@ function renderSell() {
     if (tokenValue) {
       formData.set("seller_token", tokenValue);
     }
-    const publicEmail = String(formData.get("public_email") || "").trim();
+    const publicEmail = String(formData.get("public_email") || "").trim().replace(/\s+/g, "");
     const publicPhone = String(formData.get("public_phone") || "").trim();
     if (publicEmail) {
       formData.set("public_email", publicEmail);
@@ -1297,11 +1306,19 @@ function renderSell() {
         wheelSize: formData.get("wheel_size_in"),
         hasLock
       });
+      const tokenAvailable = tokenInput.value.trim();
+      const copyButtonHtml = tokenAvailable
+        ? `<div class="inline-actions"><button class="button secondary" type="button" id="copyTokenInline">Copy token</button></div>`
+        : "";
       setNotice(
         notice,
-        `Listing created. Do not forget to copy and save your seller token.<div class="helper">${summaryText}</div>`,
+        `Listing created. Do not forget to copy and save your seller token.${copyButtonHtml}<div class="helper">${summaryText}</div>`,
         "ok"
       );
+      const inlineCopyButton = qs("#copyTokenInline", notice);
+      if (inlineCopyButton) {
+        inlineCopyButton.addEventListener("click", () => copyTokenToClipboard(notice));
+      }
       lastSubmissionSnapshot = submissionSnapshot;
       lastSubmissionHadImages = submissionHadImages;
       cooldownUntil = Date.now() + 20000;
@@ -1471,7 +1488,7 @@ async function loadDashboard(token) {
                   ? listingContacts
                       .map(
                         (contact) => `
-                          <div class="notice">
+                          <div class="notice contact-message">
                             <div>${contact.buyer_email || "-"} ${contact.buyer_phone || ""}</div>
                             ${contact.buyer_phone_methods && contact.buyer_phone_methods.length
                               ? `<div class="helper">Preferred contact: ${formatContactMethods(contact.buyer_phone_methods)}</div>`
