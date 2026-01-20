@@ -52,6 +52,8 @@ export async function onRequestPost({ request, env }) {
 
   const features = parseJsonArray(formData.get("features_json"));
   const faults = parseJsonArray(formData.get("faults_json"));
+  const paymentMethods = parseJsonArray(formData.get("payment_methods_json"));
+  const publicPhoneMethods = parseJsonArray(formData.get("public_phone_methods_json"));
 
   const validation = validateListingFields({
     price_sek: formData.get("price_sek"),
@@ -60,12 +62,15 @@ export async function onRequestPost({ request, env }) {
     condition: formData.get("condition"),
     wheel_size_in: formData.get("wheel_size_in"),
     location: formData.get("location"),
+    currency_mode: formData.get("currency_mode"),
+    payment_methods: paymentMethods,
     description: formData.get("description"),
     delivery_possible: formData.get("delivery_possible"),
     delivery_price_sek: formData.get("delivery_price_sek"),
     contact_mode: formData.get("contact_mode"),
     public_email: formData.get("public_email"),
     public_phone: formData.get("public_phone"),
+    public_phone_methods: publicPhoneMethods,
     features,
     faults
   });
@@ -125,7 +130,7 @@ export async function onRequestPost({ request, env }) {
   }
 
   const insert = env.DB.prepare(
-    "INSERT INTO listings (listing_id, seller_id, created_at, expires_at, rank, price_sek, brand, type, condition, wheel_size_in, features_json, faults_json, location, description, delivery_possible, delivery_price_sek, contact_mode, public_email, public_phone, image_keys_json, image_sizes_json, status, ip_hash, ip_stored_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)"
+    "INSERT INTO listings (listing_id, seller_id, created_at, expires_at, rank, price_sek, brand, type, condition, wheel_size_in, features_json, faults_json, location, currency_mode, payment_methods_json, description, delivery_possible, delivery_price_sek, contact_mode, public_email, public_phone, public_phone_methods_json, image_keys_json, image_sizes_json, status, ip_hash, ip_stored_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)"
   );
 
   await insert
@@ -143,12 +148,15 @@ export async function onRequestPost({ request, env }) {
       JSON.stringify(validation.value.features),
       JSON.stringify(validation.value.faults),
       validation.value.location,
+      validation.value.currency_mode,
+      JSON.stringify(validation.value.payment_methods),
       validation.value.description,
       validation.value.delivery_possible,
       validation.value.delivery_price_sek,
       validation.value.contact_mode,
       validation.value.public_email,
       validation.value.public_phone,
+      JSON.stringify(validation.value.public_phone_methods),
       JSON.stringify(imageKeys),
       JSON.stringify(imageSizes),
       ipHash,

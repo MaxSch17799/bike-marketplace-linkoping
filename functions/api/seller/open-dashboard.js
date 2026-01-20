@@ -6,6 +6,18 @@ import { ok, fail } from "../../_lib/response.js";
 import { findSellerByToken } from "../../_lib/sellers.js";
 import { recordApiRequest } from "../../_lib/usage.js";
 
+function parseJsonArray(value) {
+  if (!value) {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    return [];
+  }
+}
+
 export async function onRequestPost({ request, env }) {
   await recordApiRequest(env);
   await cleanup(env);
@@ -48,14 +60,19 @@ export async function onRequestPost({ request, env }) {
     .all();
 
   const contactsResult = await env.DB.prepare(
-    "SELECT buyer_contacts.contact_id, buyer_contacts.listing_id, buyer_contacts.created_at, buyer_contacts.buyer_email, buyer_contacts.buyer_phone, buyer_contacts.message FROM buyer_contacts JOIN listings ON buyer_contacts.listing_id = listings.listing_id WHERE listings.seller_id = ? ORDER BY buyer_contacts.created_at DESC"
+    "SELECT buyer_contacts.contact_id, buyer_contacts.listing_id, buyer_contacts.created_at, buyer_contacts.buyer_email, buyer_contacts.buyer_phone, buyer_contacts.buyer_phone_methods_json, buyer_contacts.message FROM buyer_contacts JOIN listings ON buyer_contacts.listing_id = listings.listing_id WHERE listings.seller_id = ? ORDER BY buyer_contacts.created_at DESC"
   )
     .bind(seller.seller_id)
     .all();
 
+  const contacts = (contactsResult.results || []).map((contact) => ({
+    ...contact,
+    buyer_phone_methods: parseJsonArray(contact.buyer_phone_methods_json)
+  }));
+
   return ok({
     extension_applied: extensionApplied,
     listings: listingsResult.results || [],
-    contacts: contactsResult.results || []
+    contacts
   });
 }

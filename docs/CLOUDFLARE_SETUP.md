@@ -37,6 +37,10 @@ ALTER TABLE listings ADD COLUMN image_sizes_json TEXT NOT NULL DEFAULT '[]';
 ALTER TABLE listings ADD COLUMN description TEXT;
 ALTER TABLE listings ADD COLUMN delivery_possible INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE listings ADD COLUMN delivery_price_sek INTEGER;
+ALTER TABLE listings ADD COLUMN currency_mode TEXT NOT NULL DEFAULT 'sek_only';
+ALTER TABLE listings ADD COLUMN payment_methods_json TEXT NOT NULL DEFAULT '[]';
+ALTER TABLE listings ADD COLUMN public_phone_methods_json TEXT NOT NULL DEFAULT '[]';
+ALTER TABLE buyer_contacts ADD COLUMN buyer_phone_methods_json TEXT NOT NULL DEFAULT '[]';
 
 CREATE TABLE IF NOT EXISTS usage_monthly (
   period_key TEXT PRIMARY KEY,

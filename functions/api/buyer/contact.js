@@ -4,7 +4,7 @@ import { getIpContext, isBlocked } from "../../_lib/blocklist.js";
 import { readForm } from "../../_lib/request.js";
 import { ok, fail } from "../../_lib/response.js";
 import { verifyTurnstile } from "../../_lib/turnstile.js";
-import { validateBuyerContact } from "../../_lib/validation.js";
+import { parseJsonArray, validateBuyerContact } from "../../_lib/validation.js";
 import { recordApiRequest } from "../../_lib/usage.js";
 
 export async function onRequestPost({ request, env }) {
@@ -36,7 +36,8 @@ export async function onRequestPost({ request, env }) {
   const validation = validateBuyerContact({
     buyer_email: formData.get("buyer_email"),
     buyer_phone: formData.get("buyer_phone"),
-    message: formData.get("message")
+    message: formData.get("message"),
+    buyer_phone_methods: parseJsonArray(formData.get("buyer_phone_methods_json"))
   });
   if (!validation.ok) {
     return fail(400, validation.error);
@@ -59,7 +60,7 @@ export async function onRequestPost({ request, env }) {
   const expiresAt = now + TTL.contactDays * 86400;
 
   await env.DB.prepare(
-    "INSERT INTO buyer_contacts (contact_id, listing_id, created_at, expires_at, buyer_email, buyer_phone, message, ip_hash, ip_stored_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    "INSERT INTO buyer_contacts (contact_id, listing_id, created_at, expires_at, buyer_email, buyer_phone, buyer_phone_methods_json, message, ip_hash, ip_stored_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
   )
     .bind(
       contactId,
@@ -68,6 +69,7 @@ export async function onRequestPost({ request, env }) {
       expiresAt,
       validation.value.buyer_email,
       validation.value.buyer_phone,
+      JSON.stringify(validation.value.buyer_phone_methods),
       validation.value.message,
       ipHash,
       ipHash ? now : null

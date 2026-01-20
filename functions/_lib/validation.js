@@ -1,4 +1,14 @@
-import { CONDITIONS, CONTACT_MODES, FEATURES, FAULTS, LIMITS, LISTING_TYPES } from "./constants.js";
+import {
+  CONDITIONS,
+  CONTACT_METHODS,
+  CONTACT_MODES,
+  CURRENCY_MODES,
+  FEATURES,
+  FAULTS,
+  LIMITS,
+  LISTING_TYPES,
+  PAYMENT_METHODS
+} from "./constants.js";
 
 function toNumber(value) {
   if (value === null || value === undefined || value === "") {
@@ -61,7 +71,10 @@ export function validateListingFields(fields) {
   }
 
   const wheelSize = toNumber(fields.wheel_size_in);
-  if (wheelSize !== null && (wheelSize < 10 || wheelSize > 36)) {
+  if (wheelSize === null) {
+    return { ok: false, error: "Wheel size is required." };
+  }
+  if (wheelSize < 10 || wheelSize > 36) {
     return { ok: false, error: "Invalid wheel size." };
   }
 
@@ -87,6 +100,25 @@ export function validateListingFields(fields) {
   }
   if (faults.length !== (fields.faults || []).length) {
     return { ok: false, error: "Invalid faults." };
+  }
+
+  const currencyMode = fields.currency_mode || "sek_only";
+  if (!CURRENCY_MODES.includes(currencyMode)) {
+    return { ok: false, error: "Invalid currency option." };
+  }
+
+  const paymentMethods = (fields.payment_methods || []).filter((item) =>
+    PAYMENT_METHODS.includes(item)
+  );
+  if (paymentMethods.length !== (fields.payment_methods || []).length) {
+    return { ok: false, error: "Invalid payment method." };
+  }
+
+  const publicPhoneMethods = (fields.public_phone_methods || []).filter((item) =>
+    CONTACT_METHODS.includes(item)
+  );
+  if (publicPhoneMethods.length !== (fields.public_phone_methods || []).length) {
+    return { ok: false, error: "Invalid contact method." };
   }
 
   const publicEmail = trimText(fields.public_email);
@@ -132,7 +164,10 @@ export function validateListingFields(fields) {
       delivery_price_sek: deliveryPrice,
       contact_mode: fields.contact_mode,
       public_email: publicEmail || null,
-      public_phone: publicPhone || null
+      public_phone: publicPhone || null,
+      public_phone_methods: publicPhone ? publicPhoneMethods : [],
+      currency_mode: currencyMode,
+      payment_methods: paymentMethods
     }
   };
 }
@@ -141,6 +176,12 @@ export function validateBuyerContact(fields) {
   const buyerEmail = trimText(fields.buyer_email);
   const buyerPhone = trimText(fields.buyer_phone);
   const message = trimText(fields.message);
+  const buyerPhoneMethods = (fields.buyer_phone_methods || []).filter((item) =>
+    CONTACT_METHODS.includes(item)
+  );
+  if (buyerPhoneMethods.length !== (fields.buyer_phone_methods || []).length) {
+    return { ok: false, error: "Invalid contact method." };
+  }
 
   if (!buyerEmail && !buyerPhone) {
     return { ok: false, error: "Provide email or phone." };
@@ -160,7 +201,8 @@ export function validateBuyerContact(fields) {
     value: {
       buyer_email: buyerEmail || null,
       buyer_phone: buyerPhone || null,
-      message
+      message,
+      buyer_phone_methods: buyerPhone ? buyerPhoneMethods : []
     }
   };
 }

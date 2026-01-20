@@ -59,6 +59,27 @@ const faultOptions = [
   "Loose handlebar/stem"
 ];
 
+const contactMethodOptions = [
+  { value: "sms", label: "SMS" },
+  { value: "whatsapp", label: "WhatsApp" },
+  { value: "telegram", label: "Telegram" },
+  { value: "phone_call", label: "Phone call" }
+];
+
+const currencyModeOptions = [
+  { value: "sek_eur", label: "Euro and SEK possible" },
+  { value: "sek_only", label: "Only SEK possible" },
+  { value: "eur_only", label: "Only Euro possible" }
+];
+
+const paymentMethodOptions = [
+  { value: "swish", label: "Swish" },
+  { value: "paypal", label: "PayPal" },
+  { value: "revolut", label: "Revolut" },
+  { value: "cash", label: "Cash" },
+  { value: "other", label: "Other" }
+];
+
 const locationSuggestions = [
   "Ryd",
   "Valla",
@@ -174,8 +195,131 @@ function formatBytes(bytes) {
   return `${numberValue} B`;
 }
 
+function buildListingSummary({ type, condition, location, wheelSize, hasLock }) {
+  const typeLabel = type || "Bike";
+  const conditionLabel = condition || "unknown";
+  const locationLabel = location || "-";
+  const parts = [
+    `A <strong>${typeLabel}</strong> bike in <strong>${conditionLabel}</strong> condition, located in <strong>${locationLabel}</strong>.`
+  ];
+  if (wheelSize) {
+    parts.push(`Has <strong>${wheelSize}</strong> inch wheels.`);
+  }
+  if (hasLock) {
+    parts.push("Includes a lock.");
+  }
+  return parts.join(" ");
+}
+
+function formatContactMethods(methods) {
+  if (!Array.isArray(methods) || !methods.length) {
+    return "";
+  }
+  const labels = contactMethodOptions.reduce((acc, option) => {
+    acc[option.value] = option.label;
+    return acc;
+  }, {});
+  const cleaned = methods.map((method) => labels[method] || method).filter(Boolean);
+  return cleaned.join(", ");
+}
+
+function formatCurrencyMode(mode) {
+  const match = currencyModeOptions.find((option) => option.value === mode);
+  return match ? match.label : "";
+}
+
+function formatPaymentMethods(methods) {
+  if (!Array.isArray(methods) || !methods.length) {
+    return "";
+  }
+  const labels = paymentMethodOptions.reduce((acc, option) => {
+    acc[option.value] = option.label;
+    return acc;
+  }, {});
+  const cleaned = methods.map((method) => labels[method] || method).filter(Boolean);
+  return cleaned.join(", ");
+}
+
 function setNotice(target, message, type = "") {
   target.innerHTML = message ? `<div class="notice ${type}">${message}</div>` : "";
+}
+
+function formatListingError(message, maxImagesAllowed) {
+  if (!message) {
+    return "Could not create listing.";
+  }
+  switch (message) {
+    case "Turnstile verification failed.":
+      return "Turnstile check failed. Please try again in a few seconds.";
+    case "Invalid price.":
+      return "Price is required and must be a number in SEK.";
+    case "Invalid brand.":
+      return "Brand is required (max 40 characters).";
+    case "Invalid type.":
+      return "Please pick a bike type from the list.";
+    case "Invalid condition.":
+      return "Please pick a condition from the list.";
+    case "Wheel size is required.":
+      return "Wheel size is required.";
+    case "Invalid wheel size.":
+      return "Wheel size must be between 10 and 36 inches.";
+    case "Invalid location.":
+      return "Location is required (max 25 characters).";
+    case "Description is too long.":
+      return "Description is too long (max 150 characters).";
+    case "Public contact requires email or phone.":
+      return "Public contact needs at least an email or phone number.";
+    case "Invalid public email.":
+      return "Invalid public email. Example: name@gmail.com (no spaces).";
+    case "Invalid public phone.":
+      return "Invalid phone number. Use digits, +, spaces, or hyphens.";
+    case "Invalid currency option.":
+      return "Please select a currency option.";
+    case "Invalid payment method.":
+      return "Please select a valid payment method.";
+    case "Invalid contact method.":
+      return "Please select a valid contact method.";
+    case "Delivery price is required.":
+      return "If delivery is available, set a delivery price (SEK).";
+    case "Too many images.":
+      return `You can upload up to ${maxImagesAllowed} images.`;
+    case "Image is too large.":
+      return "Each image must be under about 1.2 MB.";
+    case "Total upload is too large.":
+      return "Total upload is too large. Try fewer or smaller images.";
+    case "Invalid image type.":
+      return "Only JPG, PNG, or WebP images are allowed.";
+    case "Invalid seller token.":
+      return "That seller token is not recognized. Paste the exact token you got from this site.";
+    default:
+      return message;
+  }
+}
+
+function formatContactError(message) {
+  if (!message) {
+    return "Could not send message.";
+  }
+  switch (message) {
+    case "Provide email or phone.":
+      return "Provide at least an email or phone number.";
+    case "Invalid email.":
+      return "Invalid email. Example: name@gmail.com (no spaces).";
+    case "Invalid phone.":
+      return "Invalid phone number. Use digits, +, spaces, or hyphens.";
+    case "Message is required.":
+      return "Message is required (max 300 characters).";
+    case "Listing not available.":
+      return "This listing is no longer available.";
+    case "Listing does not accept buyer messages.":
+      return "This listing does not accept buyer messages.";
+    case "Turnstile verification failed.":
+      return "Turnstile check failed. Please try again in a few seconds.";
+    case "Invalid contact method.":
+      return "Please select valid phone contact methods.";
+    default:
+      return message;
+  }
 }
 
 async function loadListings(force = false) {
@@ -184,7 +328,8 @@ async function loadListings(force = false) {
   }
   try {
     state.listingsError = null;
-    const response = await fetch(listingsUrl, { cache: "no-store" });
+    const cacheBust = force ? `${listingsUrl}${listingsUrl.includes("?") ? "&" : "?"}t=${Date.now()}` : listingsUrl;
+    const response = await fetch(cacheBust, { cache: "no-store" });
     if (!response.ok) {
       throw new Error("Failed to load listings");
     }
@@ -342,19 +487,13 @@ function renderHome() {
 
         const features = Array.isArray(listing.features) ? listing.features : [];
         const hasLock = features.includes("Lock included");
-        const typeLabel = listing.type || "Bike";
-        const conditionLabel = listing.condition || "unknown";
-        const locationLabel = listing.location || "-";
-        const summaryParts = [
-          `A <strong>${typeLabel}</strong> bike in <strong>${conditionLabel}</strong> condition, located in <strong>${locationLabel}</strong>.`
-        ];
-        if (listing.wheel_size_in) {
-          summaryParts.push(`Has <strong>${listing.wheel_size_in}</strong> inch wheels.`);
-        }
-        if (hasLock) {
-          summaryParts.push("Includes a lock.");
-        }
-        const summaryText = summaryParts.join(" ");
+        const summaryText = buildListingSummary({
+          type: listing.type,
+          condition: listing.condition,
+          location: listing.location,
+          wheelSize: listing.wheel_size_in,
+          hasLock
+        });
         const deliveryText = listing.delivery_possible
           ? `Delivery possible for ${formatPrice(listing.delivery_price_sek)}`
           : "Pickup only";
@@ -406,6 +545,11 @@ function renderListingDetail(route) {
   const deliveryText = listing.delivery_possible
     ? `Delivery possible for ${formatPrice(listing.delivery_price_sek)}`
     : "Pickup only";
+  const currencyLabel = formatCurrencyMode(listing.currency_mode);
+  const paymentLabel = formatPaymentMethods(listing.payment_methods || []);
+  const paymentParts = [currencyLabel, paymentLabel].filter(Boolean);
+  const paymentText = paymentParts.length ? paymentParts.join(" · ") : "";
+  const publicContactMethods = formatContactMethods(listing.public_phone_methods || []);
 
   app.innerHTML = `
     <section class="section">
@@ -438,6 +582,7 @@ function renderListingDetail(route) {
             ${listing.wheel_size_in ? `<span>${listing.wheel_size_in} in</span>` : ""}
           </div>
           <div class="helper">${deliveryText}</div>
+          ${paymentText ? `<div class="helper">Payment: ${paymentText}</div>` : ""}
           <div class="helper">Posted ${formatDate(listing.created_at)} - expires ${formatDate(listing.expires_at)}</div>
           ${description ? `
             <div>
@@ -466,6 +611,7 @@ function renderListingDetail(route) {
           <div class="notice">
             <div>Email: ${listing.public_email || "-"}</div>
             <div>Phone: ${listing.public_phone || "-"}</div>
+            ${publicContactMethods ? `<div class="helper">Preferred contact: ${publicContactMethods}</div>` : ""}
           </div>
         ` : `
           <form class="form" id="contactForm">
@@ -477,6 +623,20 @@ function renderListingDetail(route) {
               Phone (optional)
               <input type="tel" name="buyer_phone" placeholder="0700..." />
             </label>
+            <div id="buyerPhoneMethods" style="display: none;">
+              <div class="helper">You can contact me via:</div>
+              <div class="tag-list">
+                ${contactMethodOptions
+                  .map(
+                    (option, index) => `
+                      <label class="tag">
+                        <input type="checkbox" name="buyer_phone_method_${index}" value="${option.value}" /> ${option.label}
+                      </label>
+                    `
+                  )
+                  .join("")}
+              </div>
+            </div>
             <label>
               Message
               <textarea name="message" maxlength="${maxMessageLength}" placeholder="Short message"></textarea>
@@ -545,15 +705,48 @@ function renderListingDetail(route) {
   const contactForm = qs("#contactForm");
   if (contactForm) {
     setupTurnstile(contactForm);
+    const buyerPhoneInput = qs("input[name='buyer_phone']", contactForm);
+    const buyerPhoneMethods = qs("#buyerPhoneMethods", contactForm);
+    const toggleBuyerPhoneMethods = () => {
+      const hasPhone = buyerPhoneInput && buyerPhoneInput.value.trim().length > 0;
+      if (buyerPhoneMethods) {
+        buyerPhoneMethods.style.display = hasPhone ? "block" : "none";
+        if (!hasPhone) {
+          qsa("input[type='checkbox']", buyerPhoneMethods).forEach((input) => {
+            input.checked = false;
+          });
+        }
+      }
+    };
+    if (buyerPhoneInput) {
+      buyerPhoneInput.addEventListener("input", toggleBuyerPhoneMethods);
+      toggleBuyerPhoneMethods();
+    }
     contactForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       const notice = qs("#contactNotice");
       setNotice(notice, "");
       const formData = new FormData(contactForm);
+      const email = String(formData.get("buyer_email") || "").trim();
+      const phone = String(formData.get("buyer_phone") || "").trim();
+      if (email) {
+        formData.set("buyer_email", email);
+      }
+      if (phone) {
+        formData.set("buyer_phone", phone);
+      }
+      const selectedMethods = [];
+      contactMethodOptions.forEach((option, index) => {
+        const input = contactForm[`buyer_phone_method_${index}`];
+        if (input && input.checked) {
+          selectedMethods.push(option.value);
+        }
+      });
+      formData.set("buyer_phone_methods_json", JSON.stringify(selectedMethods));
       formData.append("listing_id", listing.listing_id);
       const token = getTurnstileResponse(contactForm);
       if (token === null) {
-        setNotice(notice, "Turnstile is not ready.", "error");
+        setNotice(notice, "Turnstile is not ready yet. Please wait a moment and try again.", "error");
         return;
       }
       if (token) {
@@ -563,9 +756,13 @@ function renderListingDetail(route) {
       if (response.ok) {
         setNotice(notice, "Message sent.", "ok");
         contactForm.reset();
+        if (buyerPhoneMethods) {
+          buyerPhoneMethods.style.display = "none";
+        }
       } else {
-        setNotice(notice, response.error || "Could not send message.", "error");
+        setNotice(notice, formatContactError(response.error), "error");
       }
+      resetTurnstile(contactForm);
     });
   }
 
@@ -627,8 +824,6 @@ function renderSell() {
         <div class="notice">
           This listing will be deleted within 39 days unless you log in to your dashboard.
         </div>
-
-        <div id="sellNotice"></div>
         <form class="form" id="sellForm">
           <div class="form-row">
             <label>
@@ -652,10 +847,40 @@ function renderSell() {
               </select>
             </label>
           </div>
+          <div>
+            <div class="helper">Accepted currency</div>
+            <div class="tag-list" id="currencyMode">
+              ${currencyModeOptions
+                .map(
+                  (option, index) => `
+                    <label class="tag">
+                      <input type="radio" name="currency_mode" value="${option.value}" ${index === 1 ? "checked" : ""} />
+                      ${option.label}
+                    </label>
+                  `
+                )
+                .join("")}
+            </div>
+          </div>
+          <div>
+            <div class="helper">Payment methods</div>
+            <div class="tag-list" id="paymentMethods">
+              ${paymentMethodOptions
+                .map(
+                  (option, index) => `
+                    <label class="tag">
+                      <input type="checkbox" name="payment_method_${index}" value="${option.value}" /> ${option.label}
+                    </label>
+                  `
+                )
+                .join("")}
+            </div>
+            <div class="helper">Mention other payment method in description.</div>
+          </div>
             <div class="form-row">
               <label>
                 Wheel size (inches)
-                <input type="number" name="wheel_size_in" min="10" max="36" step="0.5" />
+                <input type="number" name="wheel_size_in" min="10" max="36" step="0.5" required />
               </label>
               <label>
                 Location (max 25 chars)
@@ -746,6 +971,20 @@ function renderSell() {
                 <input type="tel" name="public_phone" placeholder="0700..." />
               </label>
             </div>
+            <div id="publicPhoneMethods" style="display: none;">
+              <div class="helper">You can contact me via:</div>
+              <div class="tag-list">
+                ${contactMethodOptions
+                  .map(
+                    (option, index) => `
+                      <label class="tag">
+                        <input type="checkbox" name="public_phone_method_${index}" value="${option.value}" /> ${option.label}
+                      </label>
+                    `
+                  )
+                  .join("")}
+              </div>
+            </div>
             <div class="helper">Only share contact info you are comfortable showing publicly.</div>
           </div>
 
@@ -779,8 +1018,9 @@ function renderSell() {
 
             <div class="turnstile" data-turnstile></div>
 
-            <div class="helper" id="submitCooldownHelp"></div>
             <button class="button" type="submit" id="createListingButton">Create listing</button>
+            <div class="helper" id="submitCooldownHelp"></div>
+            <div id="sellNotice"></div>
         </form>
       </div>
     </section>
@@ -845,10 +1085,29 @@ function renderSell() {
 
   const contactMode = qs("#contactMode");
   const publicFields = qs("#publicContactFields");
+  const publicPhoneMethods = qs("#publicPhoneMethods");
+  const publicPhoneInput = qs("input[name='public_phone']", publicFields);
+  const togglePublicPhoneMethods = () => {
+    const isPublic = qs("input[name='contact_mode']:checked").value === "public_contact";
+    const hasPhone = publicPhoneInput && publicPhoneInput.value.trim().length > 0;
+    if (publicPhoneMethods) {
+      publicPhoneMethods.style.display = isPublic && hasPhone ? "block" : "none";
+      if (!hasPhone || !isPublic) {
+        qsa("input[type='checkbox']", publicPhoneMethods).forEach((input) => {
+          input.checked = false;
+        });
+      }
+    }
+  };
   contactMode.addEventListener("change", () => {
     const mode = qs("input[name='contact_mode']:checked").value;
     publicFields.style.display = mode === "public_contact" ? "block" : "none";
+    togglePublicPhoneMethods();
   });
+  if (publicPhoneInput) {
+    publicPhoneInput.addEventListener("input", togglePublicPhoneMethods);
+  }
+  togglePublicPhoneMethods();
 
   const deliveryOptions = qs("#deliveryOptions");
   const deliveryPriceFields = qs("#deliveryPriceFields");
@@ -965,9 +1224,19 @@ function renderSell() {
     if (tokenValue) {
       formData.set("seller_token", tokenValue);
     }
+    const publicEmail = String(formData.get("public_email") || "").trim();
+    const publicPhone = String(formData.get("public_phone") || "").trim();
+    if (publicEmail) {
+      formData.set("public_email", publicEmail);
+    }
+    if (publicPhone) {
+      formData.set("public_phone", publicPhone);
+    }
 
     const selectedFeatures = [];
     const selectedFaults = [];
+    const selectedPaymentMethods = [];
+    const selectedPublicPhoneMethods = [];
     featureOptions.forEach((item, index) => {
       if (sellForm[`feature_${index}`].checked) {
         selectedFeatures.push(item);
@@ -978,9 +1247,21 @@ function renderSell() {
         selectedFaults.push(item);
       }
     });
+    paymentMethodOptions.forEach((item, index) => {
+      if (sellForm[`payment_method_${index}`].checked) {
+        selectedPaymentMethods.push(item.value);
+      }
+    });
+    contactMethodOptions.forEach((item, index) => {
+      if (sellForm[`public_phone_method_${index}`] && sellForm[`public_phone_method_${index}`].checked) {
+        selectedPublicPhoneMethods.push(item.value);
+      }
+    });
 
     formData.set("features_json", JSON.stringify(selectedFeatures));
     formData.set("faults_json", JSON.stringify(selectedFaults));
+    formData.set("payment_methods_json", JSON.stringify(selectedPaymentMethods));
+    formData.set("public_phone_methods_json", JSON.stringify(selectedPublicPhoneMethods));
 
     const files = Array.from(sellForm.images.files || []).slice(0, maxImageCount);
     const submissionSnapshot = snapshotListingForm();
@@ -994,7 +1275,7 @@ function renderSell() {
 
     const token = getTurnstileResponse(sellForm);
     if (token === null) {
-      setNotice(notice, "Turnstile is not ready.", "error");
+      setNotice(notice, "Turnstile is not ready yet. Please wait a moment and try again.", "error");
       return;
     }
     if (token) {
@@ -1008,7 +1289,19 @@ function renderSell() {
         tokenInput.value = response.seller_token;
         toggleCopyButton();
       }
-      setNotice(notice, "Listing created. Keep your seller token safe.", "ok");
+      const hasLock = selectedFeatures.includes("Lock included");
+      const summaryText = buildListingSummary({
+        type: formData.get("type"),
+        condition: formData.get("condition"),
+        location: formData.get("location"),
+        wheelSize: formData.get("wheel_size_in"),
+        hasLock
+      });
+      setNotice(
+        notice,
+        `Listing created. Do not forget to copy and save your seller token.<div class="helper">${summaryText}</div>`,
+        "ok"
+      );
       lastSubmissionSnapshot = submissionSnapshot;
       lastSubmissionHadImages = submissionHadImages;
       cooldownUntil = Date.now() + 20000;
@@ -1017,7 +1310,7 @@ function renderSell() {
         refreshListings().catch(() => {});
       }, 1000);
     } else {
-      setNotice(notice, response.error || "Could not create listing.", "error");
+      setNotice(notice, formatListingError(response.error, maxImageCount), "error");
     }
     resetTurnstile(sellForm);
     setCreateButtonLoading(false);
@@ -1180,6 +1473,9 @@ async function loadDashboard(token) {
                         (contact) => `
                           <div class="notice">
                             <div>${contact.buyer_email || "-"} ${contact.buyer_phone || ""}</div>
+                            ${contact.buyer_phone_methods && contact.buyer_phone_methods.length
+                              ? `<div class="helper">Preferred contact: ${formatContactMethods(contact.buyer_phone_methods)}</div>`
+                              : ""}
                             <div>${contact.message}</div>
                             <div class="helper">${formatDateTime(contact.created_at)}</div>
                           </div>
@@ -1374,6 +1670,9 @@ async function loadAdminOverview() {
                   </div>
                   <div>Email: ${listing.public_email || "-"}</div>
                   <div>Phone: ${listing.public_phone || "-"}</div>
+                  ${listing.public_phone_methods && listing.public_phone_methods.length
+                    ? `<div class="helper">Preferred contact: ${formatContactMethods(listing.public_phone_methods)}</div>`
+                    : ""}
                   <div class="helper">${listing.contact_mode}</div>
                 </div>
               `
@@ -1394,6 +1693,9 @@ async function loadAdminOverview() {
                     <div class="helper">${formatDateTime(contact.created_at)}</div>
                   </div>
                   <div>${contact.buyer_email || "-"} ${contact.buyer_phone || ""}</div>
+                  ${contact.buyer_phone_methods && contact.buyer_phone_methods.length
+                    ? `<div class="helper">Preferred contact: ${formatContactMethods(contact.buyer_phone_methods)}</div>`
+                    : ""}
                   <div>${contact.message}</div>
                 </div>
               `
@@ -1691,6 +1993,17 @@ function renderAbout() {
           <div><strong>Are duplicates allowed?</strong> Please avoid duplicate listings and keep one listing per bike.</div>
           <div><strong>Any safety tips?</strong> Meet in public, bring a friend, and trust your gut if something feels off.</div>
         </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Contact</div>
+        <div class="helper">
+          Contact us if you see a suspected stolen bike, harmful content, harassment, or anything that feels unsafe. You
+          can also reach out with questions, feedback, or other issues.
+        </div>
+        <div class="helper">
+          For a specific listing, please use the report button on that listing when possible so we can review it faster.
+        </div>
+        <div class="helper">Email: webuyyourbike.linkoping@gmail.com</div>
       </div>
       <div class="card">
         <div class="card-title">About privacy</div>

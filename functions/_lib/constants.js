@@ -54,6 +54,12 @@ export const FAULTS = [
 
 export const CONTACT_MODES = ["public_contact", "buyer_message"];
 
+export const CONTACT_METHODS = ["sms", "whatsapp", "telegram", "phone_call"];
+
+export const PAYMENT_METHODS = ["swish", "paypal", "revolut", "cash", "other"];
+
+export const CURRENCY_MODES = ["sek_eur", "sek_only", "eur_only"];
+
 export const REPORT_STATUSES = ["open", "under_review", "done"];
 
 export const LISTING_STATUSES = ["active", "expired", "deleted"];
